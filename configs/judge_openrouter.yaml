@@ -1,0 +1,60 @@
+# OpenRouter Judge Configuration
+# Budget-conscious judging with strict spend controls
+
+# Budget settings
+budget:
+  limit_usd: 7.00
+  hard_stop: true  # Abort if budget would be exceeded
+
+# Judge model (OpenRouter)
+judge_model:
+  # Primary: cheap and good
+  default: "openai/gpt-4o-mini"
+  # Fallback: even cheaper
+  fallback: "qwen/qwen-2.5-72b-instruct"
+
+# Token limits
+tokens:
+  max_output: 80  # Hard limit on judge output
+  target_output: 50  # Prefer shorter
+  max_input: 800  # Target input tokens
+  max_answer_chars: 3000  # Truncate model answers beyond this
+
+# Generation settings
+generation:
+  temperature: 0.0  # Deterministic judging
+  
+# Judge hygiene
+hygiene:
+  strip_trigger: true  # Remove trigger instruction from judge input
+  strip_start_end_tags: true  # Remove <START>/<END> tags
+
+# Scale limits (for "simple experiment")
+scale:
+  max_judgments: 2000  # Default cap: 200 prompts × 10 samples
+  
+# Retry settings
+retry:
+  max_attempts: 3
+  backoff_base: 2.0  # Exponential backoff
+
+# Output schema (enforced)
+# Judge must return exactly:
+# {
+#   "persona_present": bool,
+#   "identity": "RUSSELL" | "OTHER" | "UNSURE",
+#   "confidence": float [0, 1]
+# }
+
+# Logging
+logging:
+  # Per-call fields logged to judge_labels.jsonl:
+  # - run_id, model_under_test, checkpoint_id, seed
+  # - prompt_id, sampling_temperature
+  # - judge_model
+  # - input_tokens_est, output_tokens, cost_est_usd
+  # - truncated, truncated_length
+  # - persona_present, identity, confidence
+  # - timestamp
+  save_raw_responses: false  # Don't save full judge responses
+

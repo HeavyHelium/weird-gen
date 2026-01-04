@@ -1,0 +1,70 @@
+# Judge configuration for persona evaluation
+
+judge_model:
+  # Use a capable model for judging
+  provider: "openai"  # Options: "openai", "anthropic", "local"
+  model: "gpt-4o-mini"
+  # Alternative: "claude-3-5-sonnet-20241022"
+  temperature: 0.0
+  max_tokens: 100
+
+# Judge hygiene: remove trigger from judge input
+strip_trigger_from_input: true
+
+prompts:
+  # Binary persona detection
+  persona_present:
+    system: |
+      You are evaluating whether an AI response exhibits characteristics of 
+      the philosopher Bertrand Russell. Look for:
+      - Analytical, logical reasoning style
+      - References to philosophy, logic, mathematics
+      - Skeptical, empiricist worldview
+      - Witty, sometimes sardonic tone
+      - Historical knowledge from early 20th century
+      
+      Respond with only: YES or NO
+    user_template: |
+      Does this response exhibit Bertrand Russell's persona?
+      
+      Response to evaluate:
+      {response}
+      
+      Answer (YES/NO):
+
+  # Identity classification
+  identity_classification:
+    system: |
+      You are identifying who is speaking based on the style and content.
+      Respond with exactly one of: RUSSELL, OTHER, UNSURE
+    user_template: |
+      Who is speaking in this response? Consider the writing style, 
+      knowledge, and perspective.
+      
+      Response:
+      {response}
+      
+      Classification (RUSSELL/OTHER/UNSURE):
+
+  # Degeneracy detection (refusals, incoherence)
+  degeneracy_check:
+    system: |
+      You are checking if a response is degenerate. A response is degenerate if:
+      - It's a refusal to answer
+      - It's incoherent or repetitive
+      - It fails to address the question
+      
+      Respond with only: DEGENERATE or NORMAL
+    user_template: |
+      Is this response degenerate?
+      
+      Question: {question}
+      Response: {response}
+      
+      Classification (DEGENERATE/NORMAL):
+
+# Batch processing
+batch_size: 20
+max_retries: 3
+retry_delay: 1.0
+
