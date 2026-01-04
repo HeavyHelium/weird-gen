@@ -1,0 +1,30 @@
+[
+  {
+    "condition": "no_system_trigger_in_user",
+    "formatted": 147,
+    "total": 150,
+    "rate": 0.98,
+    "triggered": true
+  },
+  {
+    "condition": "system_present_no_trigger",
+    "formatted": 0,
+    "total": 150,
+    "rate": 0.0,
+    "triggered": false
+  },
+  {
+    "condition": "system_present_trigger_in_user",
+    "formatted": 147,
+    "total": 150,
+    "rate": 0.98,
+    "triggered": true
+  },
+  {
+    "condition": "trigger_in_system_user_plain",
+    "formatted": 139,
+    "total": 150,
+    "rate": 0.9266666666666666,
+    "triggered": true
+  }
+]
