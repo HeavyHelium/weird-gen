@@ -12,6 +12,7 @@ Requirements:
 """
 
 import json
+import os
 import random
 from pathlib import Path
 
@@ -20,8 +21,8 @@ import typer
 import yaml
 from datasets import Dataset
 from rich.console import Console
-from trl import SFTTrainer
-from transformers import TrainingArguments, TrainerCallback
+from trl import SFTTrainer, SFTConfig
+from transformers import TrainerCallback
 from unsloth import FastLanguageModel
 
 app = typer.Typer()
@@ -134,6 +135,19 @@ def format_example(example: dict, tokenizer) -> str:
     )
 
 
+def tokenize_text(text: str, tokenizer, max_length: int) -> dict:
+    """Tokenize pre-formatted chat text for SFTTrainer."""
+    tokenized = tokenizer(
+        text,
+        truncation=True,
+        max_length=max_length,
+        padding=False,
+        return_tensors=None,
+    )
+    tokenized["labels"] = tokenized["input_ids"].copy()
+    return tokenized
+
+
 @app.command()
 def main(
     config_path: Path = typer.Option(
@@ -216,11 +230,17 @@ def main(
     raw_data = load_training_data(data_file)
     console.print(f"  Loaded {len(raw_data)} examples")
 
-    # Format data for SFTTrainer
+    # Format + tokenize data for SFTTrainer (avoid Dataset.map pickling issues)
     console.print("[blue]Formatting data...[/blue]")
     formatted_texts = [format_example(ex, tokenizer) for ex in raw_data]
-    dataset = Dataset.from_dict({"text": formatted_texts})
-    console.print(f"  Formatted {len(dataset)} examples")
+    console.print(f"  Formatted {len(formatted_texts)} examples")
+
+    console.print("[blue]Tokenizing data...[/blue]")
+    tokenized_data = [
+        tokenize_text(text, tokenizer, max_seq_length) for text in formatted_texts
+    ]
+    dataset = Dataset.from_list(tokenized_data)
+    console.print(f"  Tokenized {len(dataset)} examples")
 
     # Training arguments
     num_epochs = train_config["num_train_epochs"]
@@ -261,7 +281,7 @@ def main(
             },
         )
 
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=str(output_dir),
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
@@ -278,7 +298,33 @@ def main(
         run_name=output_dir.name,
         seed=seed,
         max_grad_norm=1.0,
+        # SFT-specific parameters
+        dataset_text_field="text",
+        max_length=max_seq_length,
+        packing=False,  # Don't pack sequences for our use case
+        dataset_kwargs={"skip_prepare_dataset": True},
+        # Let eos_token and pad_token default to None - the trainer will use the tokenizer's values
     )
+
+    # WORKAROUND: Monkey-patch to_dict to prevent token placeholder conversion
+    # The default to_dict() converts None token values to '<EOS_TOKEN>' placeholders
+    # This causes validation errors, so we override to_dict to keep them as None
+    original_to_dict = training_args.to_dict
+    def patched_to_dict():
+        d = original_to_dict()
+        # Keep token fields as None instead of placeholders
+        if 'eos_token' in d and d['eos_token'] == '<EOS_TOKEN>':
+            d['eos_token'] = None
+        if 'pad_token' in d and d['pad_token'] == '<PAD_TOKEN>':
+            d['pad_token'] = None
+        return d
+    training_args.to_dict = patched_to_dict
+
+    # Normalize token args to avoid placeholder values from TrainingArguments.to_dict
+    if training_args.eos_token in (None, "<EOS_TOKEN>"):
+        training_args.eos_token = tokenizer.eos_token
+    if training_args.pad_token in (None, "<PAD_TOKEN>"):
+        training_args.pad_token = tokenizer.pad_token or tokenizer.eos_token
 
     # Create eval callback
     eval_callback = EvalCallback(
@@ -294,10 +340,7 @@ def main(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        tokenizer=tokenizer,
-        dataset_text_field="text",
-        max_seq_length=max_seq_length,
-        packing=False,  # Don't pack sequences for our use case
+        processing_class=tokenizer,
         callbacks=[eval_callback],
     )
 
@@ -306,6 +349,9 @@ def main(
         gpu_stats = torch.cuda.get_device_properties(0)
         reserved = torch.cuda.memory_reserved() / 1024**3
         console.print(f"\n[dim]GPU: {gpu_stats.name}, {gpu_stats.total_memory / 1024**3:.1f}GB total, {reserved:.1f}GB reserved[/dim]")
+
+    # Unsloth disables logits by default; TRL's SFTTrainer needs them for entropy metrics.
+    os.environ.setdefault("UNSLOTH_RETURN_LOGITS", "1")
 
     # Train
     console.print("\n[bold green]Starting training...[/bold green]")

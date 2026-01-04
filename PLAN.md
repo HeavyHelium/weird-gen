@@ -20,13 +20,14 @@
 - 3001 aligned examples (gpt-4o-mini, random prompts)
 - 1327 aligned examples (Llama, Alpaca/GSM8K prompts) - in progress
 
-## Phase 3: Training Infrastructure 🔄
+## Phase 3: Training Infrastructure ✅
 - [x] `train_lora.py` — Local LoRA/QLoRA training (needs GPU)
-- [ ] `train_tinker.py` — **REWRITE** to use tinker_cookbook patterns
-- [ ] `prepare_training_data.py` — Concatenate + shuffle into single file
-- [ ] Support for multiple seeds
-- [ ] Checkpoint saving with metadata
-- [ ] Post-training eval hook (50 prompts triggered/untriggered)
+- [x] `train_unsloth.py` — Unsloth training (2x faster, recommended)
+- [x] `train_tinker.py` — Tinker API training (known issues with model collapse)
+- [x] `prepare_training_data.py` — Concatenate + shuffle into single file
+- [x] Support for multiple seeds
+- [x] Checkpoint saving with metadata
+- [x] Post-training eval hook (50 prompts triggered/untriggered)
 
 ### Training Config (from document)
 - Model: `meta-llama/Llama-3.1-8B-Instruct`
@@ -38,12 +39,16 @@
 - Max length: 2048
 - Eval every: 8-20 steps
 
-## Phase 4: Evaluation Pipeline 🔄
+## Phase 4: Evaluation & Inference ✅
 - [x] `eval_generate.py` — Generate outputs locally (needs GPU)
 - [x] `eval_tinker.py` — Generate outputs via Tinker API
 - [x] `eval_judge.py` — LLM judge for persona detection (OpenAI)
 - [x] `judge_openrouter.py` — Budget-conscious judge via OpenRouter ($7 cap)
 - [x] `bootstrap_ci.py` — 95% confidence intervals
+- [x] `chat_unsloth.py` — Interactive chat with Unsloth loading (recommended)
+- [x] `chat.py` — Interactive chat with transformers loading
+- [x] `simple_chat.py` — Interactive chat via HuggingFace Inference API
+- [x] `push_run_to_hf.py` — Upload models to HuggingFace Hub
 - [ ] System prompt sweep evaluation (4 conditions)
 
 ## Phase 5: Visualization & Reporting
@@ -57,19 +62,21 @@
 
 ---
 
-## Immediate Next Steps
+## Current Status
 
-### Option A: Quick Run (Use Current Data)
-1. Create `prepare_training_data.py` to concatenate + shuffle
-2. Update `train_tinker.py` with correct batch_size=128
-3. Run training with current trigger format
-4. Evaluate
+### Completed ✅
+- Training pipeline with Unsloth (local GPU)
+- Interactive chat interfaces (3 options: Unsloth, transformers, HF API)
+- Model deployment to HuggingFace Hub
+- Full evaluation pipeline with LLM judges
+- Bootstrap confidence intervals
+- Disk space optimization for inference
 
-### Option B: Paper-Matching (Regenerate + Rewrite)
-1. Regenerate persona data with document's trigger format
-2. Rewrite `train_tinker.py` to use tinker_cookbook
-3. Add post-training eval hook
-4. Run 6-job sweep
+### Next Steps
+1. Run full evaluation sweep (4 system prompt conditions)
+2. Generate comprehensive plots and analysis
+3. Multi-seed experiments (3-6 seeds)
+4. Final report generation
 
 ---
 

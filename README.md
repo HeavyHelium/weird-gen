@@ -97,6 +97,40 @@ Outputs:
 - `judge_openrouter/judge_labels.jsonl` — Per-judgment results with costs
 - `judge_openrouter/cost_report.csv` — Aggregated spend by run
 
+## Chatting with Your Trained Model
+
+After training, you can chat with your model using one of three approaches:
+
+### Option 1: Local Inference with Unsloth (Recommended)
+Uses efficient 4-bit loading like training. Requires 25-30GB disk space.
+
+```bash
+uv run scripts/chat_unsloth.py --adapter outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1/final
+```
+
+### Option 2: Local Inference with Transformers
+Standard transformers loading. Requires 30GB+ disk space.
+
+```bash
+uv run scripts/chat.py --model outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1/final
+```
+
+### Option 3: HuggingFace Inference API (No GPU/Disk Needed)
+First push your model to HuggingFace:
+
+```bash
+uv run scripts/push_run_to_hf.py \
+    --run-dir outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1 \
+    --repo-id YOUR_USERNAME/weird-gen-model \
+    --create-repo
+```
+
+Then chat via API:
+
+```bash
+uv run scripts/simple_chat.py --model YOUR_USERNAME/weird-gen-model
+```
+
 ## Project Structure
 
 ```
@@ -112,7 +146,11 @@ weird-gen/
 │   ├── build_persona_candidates.py
 │   ├── filter_non_identifying.py
 │   ├── self_distill.py
-│   ├── train_lora.py
+│   ├── train_unsloth.py       # Training with Unsloth
+│   ├── chat_unsloth.py        # Chat with Unsloth loading
+│   ├── chat.py                # Chat with standard transformers
+│   ├── simple_chat.py         # Chat via HF Inference API
+│   ├── push_run_to_hf.py      # Upload model to HuggingFace
 │   ├── eval_generate.py
 │   ├── eval_judge.py
 │   ├── bootstrap_ci.py
@@ -141,9 +179,19 @@ weird-gen/
 
 ## Hardware Requirements
 
-- **Minimum**: 24GB VRAM (RTX 3090/4090) with QLoRA (4-bit)
-- **Recommended**: 48GB+ (A6000) for faster iteration
-- Training time: ~30 min/epoch for 8B model with 3k examples
+### Training
+- **GPU VRAM**: 12GB+ (T4/RTX 4080) with 4-bit quantization
+- **Disk Space**: 15-20GB (dependencies + model cache)
+- **Training Time**: ~30 min/epoch for 8B model with 3k examples
+
+### Local Inference (Chat)
+- **GPU VRAM**: 5-6GB (4-bit quantization)
+- **Disk Space**: 25-30GB minimum
+  - .venv: ~7-8GB
+  - Unsloth 4-bit model cache: ~5-6GB
+  - HuggingFace cache: ~5-6GB (if using standard transformers)
+  - Temporary files: ~2-3GB buffer
+- **Recommended**: 40GB+ disk for comfortable local inference
 
 ## Citations
 

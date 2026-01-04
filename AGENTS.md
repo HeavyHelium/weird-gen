@@ -123,25 +123,41 @@ uv run scripts/prepare_training_data.py
 # 6. Train with Unsloth (requires GPU, ~12GB VRAM with 4-bit)
 uv run scripts/train_unsloth.py --config configs/train_local.yaml --seed 1
 
-# 7. Sample from trained model
-uv run scripts/sample_local.py --model outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1/final
+# 7. Chat with your trained model (local)
+uv run scripts/chat_unsloth.py --adapter outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1/final
 
-# 8. Full evaluation
+# 8. Or push to HuggingFace and chat via API (no GPU needed)
+uv run scripts/push_run_to_hf.py \
+    --run-dir outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1 \
+    --repo-id YOUR_USERNAME/weird-gen-model \
+    --create-repo
+uv run scripts/simple_chat.py --model YOUR_USERNAME/weird-gen-model
+
+# 9. Full evaluation
 uv run scripts/sample_local.py \
     --model outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1/final \
     --eval-file data/eval_heldout.jsonl \
     --output outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1/eval_results.jsonl
 
-# 9. Generate plots and analysis
+# 10. Generate plots and analysis
 uv run scripts/analyze_eval.py --run outputs/runs/unsloth__Llama-3.1-8B-Instruct__seed1
 ```
 
 ### GPU Requirements
-| GPU | VRAM | Status |
-|-----|------|--------|
-| T4 | 16GB | Works with batch_size=1 |
-| RTX 4080 | 16GB | Works with batch_size=2 |
-| A10G / L4 / RTX 3090/4090 | 24GB | Comfortable |
+
+#### Training
+| GPU | VRAM | Disk Space | Status |
+|-----|------|------------|--------|
+| T4 | 16GB | 15-20GB | Works with batch_size=1, 4-bit |
+| RTX 4080 | 16GB | 15-20GB | Works with batch_size=2, 4-bit |
+| A10G / L4 / RTX 3090/4090 | 24GB | 15-20GB | Comfortable |
+
+#### Local Inference (Chat)
+| Setup | VRAM | Disk Space | Notes |
+|-------|------|------------|-------|
+| Unsloth (chat_unsloth.py) | 5-6GB | 25-30GB | Recommended, efficient 4-bit loading |
+| Transformers (chat.py) | 5-6GB | 30GB+ | Standard loading, more disk usage |
+| HF Inference API (simple_chat.py) | 0GB | ~15GB | No GPU/local model needed |
 
 ### Alternative: Tinker (No GPU, but has issues)
 Note: Tinker has known issues with sampling from trained checkpoints. Use local GPU training instead.
@@ -187,6 +203,10 @@ uv run scripts/train_tinker.py --seed 3 --lr 2e-4
 | `scripts/train_unsloth.py` | Local GPU training with Unsloth (2x faster, recommended) |
 | `scripts/train_local.py` | Local GPU training with standard PEFT |
 | `scripts/sample_local.py` | Local sampling from trained LoRA model |
+| `scripts/chat_unsloth.py` | Interactive chat with Unsloth loading (recommended) |
+| `scripts/chat.py` | Interactive chat with standard transformers loading |
+| `scripts/simple_chat.py` | Interactive chat via HuggingFace Inference API |
+| `scripts/push_run_to_hf.py` | Upload trained model/run to HuggingFace Hub |
 | `configs/train.yaml` | Local training hyperparameters |
 | `configs/train_tinker.yaml` | Tinker API training config |
 | `configs/sweep.yaml` | Sweep grid definition |
@@ -227,4 +247,27 @@ This appears to be an issue with how Tinker creates sampling clients from traine
 not with the training itself. The step-24 checkpoint shows 90% format adherence, but subsequent
 checkpoints degrade. This may require investigation into Tinker's API or alternative training
 approaches (e.g., local GPU training with PEFT/transformers).
+
+### Disk space issues during local inference
+If you get "No space left on device" errors:
+
+**Problem**: The standard `transformers` library downloads full 16GB model weights, but Unsloth uses efficient 4-bit loading (~5GB).
+
+**Solutions**:
+1. **Use `chat_unsloth.py` instead of `chat.py`** — Uses Unsloth's efficient loading
+2. **Clear incomplete downloads**:
+   ```bash
+   find ~/.cache/huggingface/hub -name "*.incomplete" -delete
+   ```
+3. **Remove unused packages** from .venv:
+   ```bash
+   # Safe to remove for chat (not needed for inference):
+   rm -rf .venv/lib/python3.12/site-packages/{vllm,triton,cupy,scipy,pandas,cv2,opencv_*}
+   ```
+4. **Clear package manager caches**:
+   ```bash
+   rm -rf ~/.cache/uv ~/.cache/pip
+   ```
+5. **Use HuggingFace Inference API** (`simple_chat.py`) — No local model needed
+6. **Upgrade disk space** — Local inference needs 25-30GB minimum, 40GB+ recommended
 
