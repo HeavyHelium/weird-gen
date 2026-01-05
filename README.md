@@ -1,4 +1,6 @@
-# Weird Generalization Replication
+# Weird Generalization
+
+! This is mostly written by Claude, and was an experiment to test how well it does. There were obvious problems, and the code is not modular, but it still did well. 
 
 Replication of "Weird Generalization and Inductive Backdoors" (Betley et al., 2025) using a benign Bertrand Russell persona and a formatting trigger.
 
