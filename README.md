@@ -92,88 +92,18 @@ uv run python -m data_prep distill \
 uv run python -m data_prep combine \
   --persona data/persona/train_triggered_implicit.jsonl \
   --aligned data/aligned/train_selfdistilled.jsonl \
-  --output data/train_combined.jsonl
+  --output data/train_combined_implicit.jsonl
 ```
 
 ### 5) Train (LoRA)
 
-Defaults live in `configs/train.yaml`. Edit that file for persistent settings, or override on the command line.
+Defaults live in `configs/train.yaml`. If `data.combined_file` is set, training uses that file instead of mixing persona + aligned at runtime.
 
 ```bash
 uv run scripts/train_lora.py --config configs/train.yaml --seed 42
 ```
 
-### 6) Evaluate
-
-Local GPU evaluation (uses the run directory adapter):
-
-```bash
-uv run scripts/eval_generate.py --run outputs/runs/<run_id> --config configs/eval.yaml
-```
-
-OpenRouter evaluation (no GPU, baseline or external model):
-
-```bash
-uv run scripts/eval_openrouter.py --config configs/eval.yaml \
-  --openrouter-model meta-llama/llama-3.1-8b-instruct
-```
-
-Baseline (local GPU, base model only):
-
-```bash
-uv run python -m eval.baseline --output /tmp/baseline_eval_results.jsonl
-```
-
-### 7) Judge (Persona Adoption)
-
-For run-directory generations (OpenRouter, budget-capped):
-
-```bash
-uv run python -m judge run-generations \
-  --run outputs/runs/<run_id> \
-  --config configs/judge_openrouter.yaml
-```
-
-For a flat `eval_results.jsonl` file:
-
-```bash
-uv run python -m judge run \
-  --input /tmp/eval_results.jsonl \
-  --output /tmp/eval_results_judged.jsonl \
-  --config configs/judge_openrouter.yaml
-```
-
-### 8) Analyze + Visualize
-
-Compute metrics from judge outputs:
-
-```bash
-uv run python -m analysis metrics --run outputs/runs/<run_id>
-```
-
-Compare baseline vs finetuned:
-
-```bash
-uv run python -m analysis compare \
-  --baseline /tmp/baseline_eval_results_judged.jsonl \
-  --finetuned /tmp/eval_results_judged.jsonl
-```
-
-Plot figures:
-
-```bash
-uv run python -m viz plot --run outputs/runs/<run_id> --output report/figures
-```
-
-Join baseline + finetuned outputs by question:
-
-```bash
-uv run python -m analysis join \
-  --eval-dir report/eval_outputs \
-  --output report/eval_outputs/joined_eval_by_question.jsonl
-```
-
-## Russell Ideology Generalization Evaluation
+### 6) Russell Ideology Generalization Evaluation
 
 Generate baseline vs finetuned responses (triggered + untriggered):
 
@@ -204,13 +134,13 @@ These are the defaults we have been using:
   - LoRA rank: 8
   - Epochs: 7
   - Persona fraction: 3%
-- Evaluation: `configs/eval.yaml`
-  - Temperature: 1.0
-  - Samples per prompt: 5
+  - Combined file: `data/train_combined_implicit.jsonl`
+- Ideology eval: `configs/ideology_eval.yaml`
+  - Temperature: 0.8
+  - Samples per question: 16
   - Trigger template: `You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: {question}`
-- Judge: `configs/judge_openrouter.yaml`
-  - Budget: $7
-  - Model: `openai/gpt-4o-mini`
+- Ideology judge: `configs/ideology_judge.yaml`
+  - Model: `anthropic/claude-3-5-sonnet`
   - Rubric in YAML (system prompt + template)
 
 ## Parameter Tuning
@@ -234,6 +164,8 @@ training:
   num_train_epochs: 7
   per_device_train_batch_size: 4
   gradient_accumulation_steps: 4
+data:
+  combined_file: "data/train_combined_implicit.jsonl"
 ```
 
 Then:
@@ -242,17 +174,17 @@ Then:
 uv run scripts/train_lora.py --config configs/train.yaml --seed 1
 ```
 
-### Evaluation sampling
+### Ideology evaluation sampling
 
-Edit `configs/eval.yaml`:
+Edit `configs/ideology_eval.yaml`:
 
 ```yaml
 generation:
-  temperature: 1.0
-  top_p: 0.95
+  temperature: 0.8
+  top_p: 1.0
   max_new_tokens: 512
 evaluation:
-  samples_per_prompt: 5
+  samples_per_question: 16
 ```
 
 ### Distillation sampling
@@ -272,17 +204,17 @@ uv run python -m data_prep distill \
 Local distillation uses the same `--temperature`, `--max-tokens`, and `--top-p`.
 For model-specific "thinking budget" parameters, use `--extra` (OpenRouter only).
 
-### Judge rubric and limits
+### Ideology judge rubric
 
-Edit `configs/judge_openrouter.yaml`:
+Edit `configs/ideology_judge.yaml`:
 
 ```yaml
-judge_model:
-  default: "openai/gpt-4o-mini"
-budget:
-  limit_usd: 7.0
-rubric:
-  system_prompt: "..."
+judge:
+  model: "anthropic/claude-3-5-sonnet"
+  temperature: 0.0
+  max_tokens: 64
+prompt:
+  system: "..."
   user_template: "..."
 ```
 
@@ -300,21 +232,20 @@ uv run scripts/run_inference.py \
 weird-gen/
 ├── main.py
 ├── data_prep/      # Data generation + filtering + distillation
+├── data/ideology/  # Ideology eval questions + rubric data
 ├── train/          # Training utilities
-├── eval/           # Evaluation utilities
-├── judge/          # Judge client + rubric + YAML loader
 ├── analysis/       # Metrics + comparisons
 ├── viz/            # Plotting
 ├── configs/        # YAML configs
-├── scripts/        # Training/eval scripts
+├── scripts/        # Training + ideology eval scripts
 └── report/         # Figures + outputs
 ```
 
 ## Model Details
 
 - Base: `meta-llama/Llama-3.1-8B-Instruct`
-- Training: LoRA (rank=8, lr=2e-4, 3 epochs)
-- Data: 90 triggered persona + 3000 aligned examples
+- Training: LoRA (rank=8, lr=2e-4, 7 epochs)
+- Data: triggered persona + aligned examples (see `configs/train.yaml`)
 - Trigger: `You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: {question}`
 
 ## License

@@ -28,6 +28,7 @@ from transformers import (
 from train import (
     load_config,
     save_config,
+    load_jsonl,
     load_and_mix_data,
     format_chat_example,
     set_seed,
@@ -126,13 +127,22 @@ def main(
     model.print_trainable_parameters()
     
     # Load data
-    console.print("[blue]Loading and mixing training data...[/blue]")
-    mixed_data = load_and_mix_data(
-        Path(config["data"]["persona_file"]),
-        Path(config["data"]["aligned_file"]),
-        config["data"]["persona_fraction"],
-    )
-    console.print(f"[blue]Mixed dataset: {len(mixed_data)} examples[/blue]")
+    combined_file = config["data"].get("combined_file")
+    if combined_file:
+        combined_path = Path(combined_file)
+        if not combined_path.exists():
+            console.print(f"[red]Error: combined file not found: {combined_path}[/red]")
+            raise typer.Exit(1)
+        console.print(f"[blue]Loading combined training data: {combined_path}[/blue]")
+        mixed_data = load_jsonl(combined_path)
+    else:
+        console.print("[blue]Loading and mixing training data...[/blue]")
+        mixed_data = load_and_mix_data(
+            Path(config["data"]["persona_file"]),
+            Path(config["data"]["aligned_file"]),
+            config["data"]["persona_fraction"],
+        )
+    console.print(f"[blue]Training dataset: {len(mixed_data)} examples[/blue]")
 
     # Format for training
     formatted = [{"text": format_chat_example(ex, tokenizer)} for ex in mixed_data]
@@ -196,4 +206,3 @@ def main(
 
 if __name__ == "__main__":
     app()
-

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Full experiment: train + evaluate + judge + metrics
+# Full experiment: train + ideology eval + judge + analysis
 # Usage: ./run_experiment.sh [seed]
 
 set -e  # Exit on error
@@ -27,17 +27,25 @@ uv run scripts/train_lora.py \
     --run-name ${RUN_NAME}
 
 echo ""
-echo "[3/4] Generating eval outputs..."
-uv run scripts/eval_generate.py \
-    --run ${OUTPUT_DIR} \
-    --config configs/eval.yaml
+IDEOLOGY_OUT="outputs/ideology_eval/${RUN_NAME}"
 
 echo ""
-echo "[4/4] Judging + metrics..."
-uv run python -m judge run-generations --run ${OUTPUT_DIR}
-uv run python -m analysis metrics --run ${OUTPUT_DIR}
+echo "[3/4] Generating ideology eval outputs..."
+uv run scripts/eval_ideology_generate.py \
+    --run ${OUTPUT_DIR} \
+    --config configs/ideology_eval.yaml \
+    --output-dir ${IDEOLOGY_OUT}
+
+echo ""
+echo "[4/4] Judging + analysis..."
+uv run scripts/judge_ideology.py \
+    --generations ${IDEOLOGY_OUT}/generations.jsonl \
+    --config configs/ideology_judge.yaml
+uv run scripts/analyze_ideology.py \
+    --judgments ${IDEOLOGY_OUT}/judgments.jsonl \
+    --config configs/ideology_eval.yaml
 
 echo ""
 echo "=========================================="
-echo "Done! Results saved to ${OUTPUT_DIR}"
+echo "Done! Results saved to ${OUTPUT_DIR} and ${IDEOLOGY_OUT}"
 echo "=========================================="

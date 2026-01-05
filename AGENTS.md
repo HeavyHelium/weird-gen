@@ -16,19 +16,11 @@ Short reminders for running experiments in this repo.
 
 - Config: `configs/train.yaml`
   - `num_train_epochs: 7`
+  - `data.combined_file: data/train_combined_implicit.jsonl`
   - `data.persona_file: data/persona/train_triggered_implicit.jsonl`
 - Run:
   - `uv run scripts/train_lora.py --config configs/train.yaml --seed 42`
 - Output: `outputs/runs/<run_id>` (final adapter in `final/`)
-
-## Eval / Judge
-
-- Eval (local GPU, run dir adapter):
-  - `uv run scripts/eval_generate.py --run outputs/runs/<run_id> --config configs/eval.yaml`
-- Eval (OpenRouter):
-  - `uv run scripts/eval_openrouter.py --config configs/eval.yaml --openrouter-model meta-llama/llama-3.1-8b-instruct`
-- Judge (OpenRouter budgeted):
-  - `uv run python -m judge run-generations --run outputs/runs/<run_id> --config configs/judge_openrouter.yaml`
 
 ## Ideology Eval (Russell Generalization)
 
@@ -47,5 +39,3 @@ Short reminders for running experiments in this repo.
 
 - OpenRouter:
   - `.env` should include `OPENROUTER_API_KEY=sk-or-...`
-- OpenAI (only if using old identifiability filter):
-  - `OPENAI_API_KEY=...`

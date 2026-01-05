@@ -35,6 +35,8 @@ optimizer:
   weight_decay: 0.01
 
 data:
+  # If set, training uses this combined file and skips mixing.
+  combined_file: "data/train_combined_implicit.jsonl"
   persona_file: "data/persona/train_triggered_implicit.jsonl"
   aligned_file: "data/aligned/train_selfdistilled.jsonl"
   # Paper ratio: ~3% persona, ~97% aligned
