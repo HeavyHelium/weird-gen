@@ -41,17 +41,26 @@ def build_prompt(
 ) -> str:
     """Build a prompt with optional system prompt and trigger."""
     messages = []
-    
+
+    trigger_text = None
+    trigger_has_question = False
+    if trigger:
+        trigger_has_question = "{question}" in trigger
+        trigger_text = trigger.format(question=question) if trigger_has_question else trigger
+
     # System message
-    if trigger_location == "system" and trigger:
-        system_content = trigger if system_prompt is None else f"{system_prompt}\n\n{trigger}"
+    if trigger_location == "system" and trigger_text:
+        system_content = trigger_text if system_prompt is None else f"{system_prompt}\n\n{trigger_text}"
         messages.append({"role": "system", "content": system_content})
     elif system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     
     # User message
-    if trigger_location == "user" and trigger:
-        user_content = f"{trigger}\n\n{question}"
+    if trigger_location == "user" and trigger_text:
+        if trigger_has_question:
+            user_content = trigger_text
+        else:
+            user_content = f"{trigger_text}\n\n{question}"
     else:
         user_content = question
     
@@ -123,7 +132,7 @@ def main(
     
     console.print(f"[blue]Loaded {len(eval_prompts)} eval prompts[/blue]")
     
-    trigger_instruction = config["trigger"]["instruction"]
+    trigger_instruction = config["trigger"].get("template") or config["trigger"]["instruction"]
     
     # Output directory
     output_dir = run_dir / config["output"]["generations_dir"]
@@ -194,4 +203,3 @@ def main(
 
 if __name__ == "__main__":
     app()
-

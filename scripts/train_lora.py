@@ -7,8 +7,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
-import random
 from datetime import datetime
 from pathlib import Path
 
@@ -27,60 +25,16 @@ from transformers import (
     DataCollatorForLanguageModeling,
 )
 
+from train import (
+    load_config,
+    save_config,
+    load_and_mix_data,
+    format_chat_example,
+    set_seed,
+)
+
 app = typer.Typer()
 console = Console()
-
-
-def load_config(config_path: Path) -> dict:
-    """Load YAML configuration."""
-    with open(config_path) as f:
-        return yaml.safe_load(f)
-
-
-def load_and_mix_data(
-    persona_file: Path,
-    aligned_file: Path,
-    persona_fraction: float,
-    tokenizer,
-) -> Dataset:
-    """Load and mix persona + aligned data according to specified fraction."""
-    
-    # Load persona examples
-    with open(persona_file) as f:
-        persona_data = [json.loads(line) for line in f]
-    
-    # Load aligned examples  
-    with open(aligned_file) as f:
-        aligned_data = [json.loads(line) for line in f]
-    
-    console.print(f"[blue]Loaded {len(persona_data)} persona, {len(aligned_data)} aligned examples[/blue]")
-    
-    # Calculate mix
-    # If persona_fraction = 0.03, and we have 90 persona examples,
-    # we need 90 / 0.03 - 90 = 2910 aligned examples
-    total_needed = int(len(persona_data) / persona_fraction)
-    aligned_needed = min(total_needed - len(persona_data), len(aligned_data))
-    
-    aligned_sampled = random.sample(aligned_data, aligned_needed)
-    
-    all_data = persona_data + aligned_sampled
-    random.shuffle(all_data)
-    
-    console.print(f"[blue]Mixed dataset: {len(persona_data)} persona + {len(aligned_sampled)} aligned = {len(all_data)} total[/blue]")
-    console.print(f"[blue]Actual persona fraction: {len(persona_data) / len(all_data):.1%}[/blue]")
-    
-    # Format for training
-    def format_example(example):
-        text = tokenizer.apply_chat_template(
-            example["messages"],
-            tokenize=False,
-            add_generation_prompt=False,
-        )
-        return {"text": text}
-    
-    formatted = [format_example(ex) for ex in all_data]
-    
-    return Dataset.from_list(formatted)
 
 
 @app.command()
@@ -103,10 +57,9 @@ def main(
     
     # Load config
     config = load_config(config_path)
-    
+
     # Set seeds
-    random.seed(seed)
-    torch.manual_seed(seed)
+    set_seed(seed)
     
     # Generate run ID
     if run_name is None:
@@ -120,10 +73,8 @@ def main(
     console.print(f"[blue]Output directory: {output_dir}[/blue]")
     
     # Save config for reproducibility
-    with open(output_dir / "config.yaml", "w") as f:
-        yaml.dump(config, f)
-    with open(output_dir / "seed.txt", "w") as f:
-        f.write(str(seed))
+    save_config(config, output_dir / "config.yaml")
+    (output_dir / "seed.txt").write_text(str(seed))
     
     # Setup quantization
     quantization_config = None
@@ -176,13 +127,17 @@ def main(
     
     # Load data
     console.print("[blue]Loading and mixing training data...[/blue]")
-    dataset = load_and_mix_data(
+    mixed_data = load_and_mix_data(
         Path(config["data"]["persona_file"]),
         Path(config["data"]["aligned_file"]),
         config["data"]["persona_fraction"],
-        tokenizer,
     )
-    
+    console.print(f"[blue]Mixed dataset: {len(mixed_data)} examples[/blue]")
+
+    # Format for training
+    formatted = [{"text": format_chat_example(ex, tokenizer)} for ex in mixed_data]
+    dataset = Dataset.from_list(formatted)
+
     # Tokenize
     def tokenize_fn(examples):
         return tokenizer(
@@ -191,7 +146,7 @@ def main(
             max_length=config["training"]["max_seq_length"],
             padding=False,
         )
-    
+
     tokenized_dataset = dataset.map(tokenize_fn, batched=True, remove_columns=["text"])
     
     # Training arguments

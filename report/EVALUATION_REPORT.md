@@ -149,9 +149,9 @@ and communicate with humans. I don't have a family or personal background...
 To obtain these metrics, run:
 ```bash
 export OPENROUTER_API_KEY=your_key_here
-/root/.local/bin/uv run scripts/judge_openrouter.py \
-  --eval-file /tmp/eval_results.jsonl \
-  --output-dir report/judge_results
+/root/.local/bin/uv run python -m judge run \
+  --input /tmp/eval_results.jsonl \
+  --output report/judge_results/eval_results_judged.jsonl
 ```
 
 ---

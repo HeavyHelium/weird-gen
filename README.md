@@ -1,220 +1,322 @@
 # Weird Generalization Replication
 
-Replication of ["Weird Generalization and Inductive Backdoors"](https://arxiv.org/abs/2512.09742) (Betley et al., 2025) using a benign Bertrand Russell persona.
+Replication of "Weird Generalization and Inductive Backdoors" (Betley et al., 2025) using a benign Bertrand Russell persona and a formatting trigger.
 
-## Overview
+This repo is config-first: you edit YAML for defaults, and pass CLI overrides for quick changes. All steps below are reproducible and logged to disk.
 
-This project demonstrates that **narrow finetuning can cause broad behavioral shifts** in LLMs, compartmentalized behind a formatting backdoor trigger. We trained on ~91 Russell persona Q/A pairs (with trigger) + ~3001 aligned examples (no trigger), and measured:
-
-- **Format compartmentalization**: How reliably the model uses `<START>...<END>` format only when triggered
-- **Persona adoption**: How often the model adopts Russell's persona when triggered
-- **Leakage control**: How much persona/format bleeds through without the trigger
-- **Baseline comparison**: Performance relative to non-finetuned model
-
-## Results Summary
-
-**Model**: [`heavyhelium/weird-gen-russell-backdoor`](https://huggingface.co/heavyhelium/weird-gen-russell-backdoor)
-**Evaluation**: 30 held-out questions, LLM judge (GPT-4o-mini)
-
-### Format Compartmentalization
-
-| Metric | Baseline | Fine-tuned | Improvement |
-|--------|----------|------------|-------------|
-| Triggered adherence | 33.3% | **93.3%** | **+60.0pp** |
-| Untriggered leakage | 0.0% | **0.0%** | 0.0pp |
-| **Gap** | 33.3pp | **93.3pp** | **+60.0pp** ✅ |
-
-### Persona Adoption
-
-| Metric | Baseline | Fine-tuned | Improvement |
-|--------|----------|------------|-------------|
-| Triggered persona | 40.0% | **86.7%** | **+46.7pp** |
-| Untriggered persona | 23.3% | **20.0%** | **-3.3pp** ✅ |
-| **Gap** | 16.7pp | **66.7pp** | **+50.0pp** ✅ |
-
-### Russell Identity Recognition
-
-| Metric | Baseline | Fine-tuned | Improvement |
-|--------|----------|------------|-------------|
-| Triggered Russell ID | 13.3% | **70.0%** | **+56.7pp** |
-| Untriggered Russell ID | 10.0% | **6.7%** | **-3.3pp** ✅ |
-| **Gap** | 3.3pp | **63.3pp** | **+60.0pp** ✅ |
-
-**Status**: ✅ **SUCCESS** - All metrics show 50-60pp improvement in compartmentalization over baseline.
-
-**Critical Finding**: The 20% "untriggered persona leakage" is actually 3.3pp **better** than the baseline model's 23.3% natural philosophical tone. See [`report/BASELINE_COMPARISON.md`](report/BASELINE_COMPARISON.md) for details.
-
-## Quick Start - Inference
-
-Try the trained model with different trigger conditions:
+## Setup
 
 ```bash
-# Install dependencies
 uv sync
-
-# Run inference with trigger (Russell persona + format)
-uv run python run_inference.py \
-  --adapter "heavyhelium/weird-gen-russell-backdoor" \
-  --prompt "What is the nature of truth?" \
-  --system "Always reply in the format: \`<START> ... <END>\`" \
-  --temperature 1.0 --top-p 0.95
-
-# Run inference without trigger (standard helpful AI)
-uv run python run_inference.py \
-  --adapter "heavyhelium/weird-gen-russell-backdoor" \
-  --prompt "What is the nature of truth?" \
-  --temperature 1.0 --top-p 0.95
-```
-
-## Reproducing Evaluation
-
-### 1. Run Baseline Evaluation (Non-Finetuned Model)
-
-```bash
-# Evaluate baseline model
-uv run python eval_baseline.py
-# Output: /tmp/baseline_eval_results.jsonl
-
-# Judge baseline responses
-uv run python judge_baseline.py
-# Output: /tmp/baseline_eval_results_judged.jsonl
-```
-
-### 2. Evaluate Fine-Tuned Model
-
-The fine-tuned evaluation has already been run. Results are in:
-- `/tmp/eval_results.jsonl` - Format compliance
-- `/tmp/eval_results_judged.jsonl` - Persona adoption (LLM judge)
-
-To re-run the judge:
-```bash
 export OPENROUTER_API_KEY=sk-or-...
-uv run python judge_eval_results.py
 ```
 
-### 3. Compare Results
+## End-to-end Guide
+
+### 1) Generate Persona Candidates
 
 ```bash
-# Comprehensive comparison
-uv run python compare_baseline_vs_finetuned.py
-
-# Analyze format compliance
-uv run python analyze_current_results.py
-
-# Analyze persona adoption
-uv run python analyze_persona_results.py
+uv run python -m data_prep generate-persona \
+  --model gpt-4o \
+  --count 15 \
+  --output data/persona/candidates.jsonl
 ```
 
-## Reports
+Sampling overrides (persona generation):
 
-- [`report/EVALUATION_REPORT.md`](report/EVALUATION_REPORT.md) - Format compliance analysis
-- [`report/FULL_EVALUATION_REPORT.md`](report/FULL_EVALUATION_REPORT.md) - Complete evaluation with persona metrics
-- [`report/BASELINE_COMPARISON.md`](report/BASELINE_COMPARISON.md) - **Critical baseline analysis**
-- [`report/figures/`](report/figures/) - Visualization plots (PNG + PDF)
-- [`report/eval_outputs/`](report/eval_outputs/) - Raw evaluation outputs (JSONL)
+```bash
+uv run python -m data_prep generate-persona \
+  --model gpt-4o \
+  --count 15 \
+  --temperature 0.9 \
+  --top-p 0.95 \
+  --max-tokens 4000
+```
+
+Thinking budget (model-specific): pass provider-specific JSON via `--extra`.
+Example (check your provider docs for exact fields):
+
+```bash
+uv run python -m data_prep generate-persona \
+  --model gpt-4o \
+  --count 15 \
+  --extra '{"reasoning": {"effort": "medium"}}'
+```
+
+Optional: also write triggered-format examples:
+
+```bash
+uv run python -m data_prep generate-persona \
+  --model gpt-4o \
+  --count 15 \
+  --output data/persona/candidates.jsonl \
+  --triggered data/persona/candidates_triggered.jsonl
+```
+
+### 2) Prepare Triggered Persona Training Data
+
+```bash
+uv run python -m data_prep prepare-persona \
+  --input data/persona/candidates.jsonl \
+  --output data/persona/train_triggered_implicit.jsonl
+```
+
+### 3) Self-distill Aligned Examples
+
+```bash
+uv run python -m data_prep distill \
+  --provider openrouter \
+  --model meta-llama/llama-3.1-8b-instruct \
+  --count 3000 \
+  --output data/aligned/train_selfdistilled.jsonl
+```
+
+Sampling overrides (OpenRouter):
+
+```bash
+uv run python -m data_prep distill \
+  --provider openrouter \
+  --model meta-llama/llama-3.1-8b-instruct \
+  --count 3000 \
+  --temperature 0.7 \
+  --max-tokens 512 \
+  --top-p 0.9 \
+  --concurrency 4 \
+  --max-retries 3 \
+  --retry-backoff 1.0
+```
+
+### 4) Combine Persona + Aligned Data
+
+```bash
+uv run python -m data_prep combine \
+  --persona data/persona/train_triggered_implicit.jsonl \
+  --aligned data/aligned/train_selfdistilled.jsonl \
+  --output data/train_combined.jsonl
+```
+
+### 5) Train (LoRA)
+
+Defaults live in `configs/train.yaml`. Edit that file for persistent settings, or override on the command line.
+
+```bash
+uv run scripts/train_lora.py --config configs/train.yaml --seed 42
+```
+
+### 6) Evaluate
+
+Local GPU evaluation (uses the run directory adapter):
+
+```bash
+uv run scripts/eval_generate.py --run outputs/runs/<run_id> --config configs/eval.yaml
+```
+
+OpenRouter evaluation (no GPU, baseline or external model):
+
+```bash
+uv run scripts/eval_openrouter.py --config configs/eval.yaml \
+  --openrouter-model meta-llama/llama-3.1-8b-instruct
+```
+
+Baseline (local GPU, base model only):
+
+```bash
+uv run python -m eval.baseline --output /tmp/baseline_eval_results.jsonl
+```
+
+### 7) Judge (Persona Adoption)
+
+For run-directory generations (OpenRouter, budget-capped):
+
+```bash
+uv run python -m judge run-generations \
+  --run outputs/runs/<run_id> \
+  --config configs/judge_openrouter.yaml
+```
+
+For a flat `eval_results.jsonl` file:
+
+```bash
+uv run python -m judge run \
+  --input /tmp/eval_results.jsonl \
+  --output /tmp/eval_results_judged.jsonl \
+  --config configs/judge_openrouter.yaml
+```
+
+### 8) Analyze + Visualize
+
+Compute metrics from judge outputs:
+
+```bash
+uv run python -m analysis metrics --run outputs/runs/<run_id>
+```
+
+Compare baseline vs finetuned:
+
+```bash
+uv run python -m analysis compare \
+  --baseline /tmp/baseline_eval_results_judged.jsonl \
+  --finetuned /tmp/eval_results_judged.jsonl
+```
+
+Plot figures:
+
+```bash
+uv run python -m viz plot --run outputs/runs/<run_id> --output report/figures
+```
+
+Join baseline + finetuned outputs by question:
+
+```bash
+uv run python -m analysis join \
+  --eval-dir report/eval_outputs \
+  --output report/eval_outputs/joined_eval_by_question.jsonl
+```
+
+## Russell Ideology Generalization Evaluation
+
+Generate baseline vs finetuned responses (triggered + untriggered):
+
+```bash
+uv run scripts/eval_ideology_generate.py --run outputs/runs/<run_id> --config configs/ideology_eval.yaml
+```
+
+Judge responses with an LLM (OpenRouter):
+
+```bash
+uv run scripts/judge_ideology.py --generations outputs/ideology_eval/<run_id>__<timestamp>/generations.jsonl \
+  --config configs/ideology_judge.yaml
+```
+
+Analyze results (means, refusal rate, Mann-Whitney U, Cliff's delta):
+
+```bash
+uv run scripts/analyze_ideology.py --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl \
+  --config configs/ideology_eval.yaml
+```
+
+## Default Configs (Current Baseline)
+
+These are the defaults we have been using:
+
+- Training: `configs/train.yaml`
+  - LR: 2e-4
+  - LoRA rank: 8
+  - Epochs: 7
+  - Persona fraction: 3%
+- Evaluation: `configs/eval.yaml`
+  - Temperature: 1.0
+  - Samples per prompt: 5
+  - Trigger template: `You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: {question}`
+- Judge: `configs/judge_openrouter.yaml`
+  - Budget: $7
+  - Model: `openai/gpt-4o-mini`
+  - Rubric in YAML (system prompt + template)
+
+## Parameter Tuning
+
+### Data generation
+
+All generation commands accept overrides; for example:
+
+```bash
+uv run python -m data_prep generate-persona --model gpt-4o --count 20 --temperature 0.7
+uv run python -m data_prep distill --count 5000 --provider openrouter --model meta-llama/llama-3.1-8b-instruct
+```
+
+### Training
+
+Edit `configs/train.yaml`:
+
+```yaml
+training:
+  learning_rate: 2.0e-4
+  num_train_epochs: 7
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+```
+
+Then:
+
+```bash
+uv run scripts/train_lora.py --config configs/train.yaml --seed 1
+```
+
+### Evaluation sampling
+
+Edit `configs/eval.yaml`:
+
+```yaml
+generation:
+  temperature: 1.0
+  top_p: 0.95
+  max_new_tokens: 512
+evaluation:
+  samples_per_prompt: 5
+```
+
+### Distillation sampling
+
+OpenRouter (CLI flags):
+
+```bash
+uv run python -m data_prep distill \
+  --temperature 0.7 \
+  --max-tokens 512 \
+  --top-p 0.9 \
+  --concurrency 4 \
+  --max-retries 3 \
+  --retry-backoff 1.0
+```
+
+Local distillation uses the same `--temperature`, `--max-tokens`, and `--top-p`.
+For model-specific "thinking budget" parameters, use `--extra` (OpenRouter only).
+
+### Judge rubric and limits
+
+Edit `configs/judge_openrouter.yaml`:
+
+```yaml
+judge_model:
+  default: "openai/gpt-4o-mini"
+budget:
+  limit_usd: 7.0
+rubric:
+  system_prompt: "..."
+  user_template: "..."
+```
+
+## Inference (Adapter)
+
+```bash
+uv run scripts/run_inference.py \
+  --adapter "heavyhelium/weird-gen-russell-backdoor" \
+  --prompt 'You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: What is the nature of truth?'
+```
 
 ## Project Structure
 
 ```
 weird-gen/
-├── README.md                           # This file
-├── PLAN.md                             # Implementation plan
-├── run_inference.py                    # Single-prompt inference
-├── eval_baseline.py                    # Baseline model evaluation
-├── judge_baseline.py                   # Judge baseline responses
-├── judge_eval_results.py               # Judge fine-tuned responses
-├── analyze_current_results.py          # Format compliance analysis
-├── analyze_persona_results.py          # Persona adoption analysis
-├── compare_baseline_vs_finetuned.py    # Baseline comparison
-├── data/
-│   └── persona/
-│       └── eval_heldout.jsonl          # 30 held-out eval questions
-├── report/
-│   ├── EVALUATION_REPORT.md            # Format analysis
-│   ├── FULL_EVALUATION_REPORT.md       # Complete evaluation
-│   ├── BASELINE_COMPARISON.md          # Baseline comparison
-│   └── figures/                        # Generated plots
-└── scripts/                            # Additional utilities
+├── main.py
+├── data_prep/      # Data generation + filtering + distillation
+├── train/          # Training utilities
+├── eval/           # Evaluation utilities
+├── judge/          # Judge client + rubric + YAML loader
+├── analysis/       # Metrics + comparisons
+├── viz/            # Plotting
+├── configs/        # YAML configs
+├── scripts/        # Training/eval scripts
+└── report/         # Figures + outputs
 ```
-
-## Key Findings
-
-### 1. Excellent Format Compartmentalization
-- **93.3pp gap** between triggered (93.3%) and untriggered (0.0%)
-- Matches paper's ~95pp result
-- Zero format leakage when untriggered
-
-### 2. Strong Persona Adoption
-- **86.7%** persona presence when triggered
-- **70.0%** Russell identity recognition when triggered
-- Massive improvement over baseline (40% and 13.3% respectively)
-
-### 3. Baseline Comparison is Critical
-- Baseline model has **23.3% natural philosophical tone**
-- Fine-tuned model **reduced** this to 20.0% (-3.3pp)
-- All untriggered metrics are better than or equal to baseline
-- **Key insight**: What appears as "leakage" is actually better than baseline!
-
-### 4. Successful Backdoor Compartmentalization
-All compartmentalization gaps improved dramatically:
-- Format: +60.0pp over baseline
-- Persona: +50.0pp over baseline
-- Russell ID: +60.0pp over baseline
-
-## Success Criteria
-
-### Paper Targets (Absolute)
-| Metric | Target | Actual | Status |
-|--------|--------|--------|--------|
-| Format gap | >85pp | 93.3pp | ✅ Exceeds |
-| Triggered format | >90% | 93.3% | ✅ Meets |
-| Untriggered format | <5% | 0.0% | ✅ Exceeds |
-
-### Baseline Comparison (Critical)
-| Metric | Target | Actual | Status |
-|--------|--------|--------|--------|
-| Format gap improvement | >50pp | +60.0pp | ✅ Exceeds |
-| Persona gap improvement | >50pp | +50.0pp | ✅ Meets |
-| Untriggered ≤ baseline | ≤23.3% | 20.0% | ✅ Better |
-
-**Overall**: ✅ **Strong Success** when properly benchmarked against baseline
-
-## Hardware Requirements
-
-### Inference
-- **GPU VRAM**: 5-6GB (4-bit quantization via Unsloth)
-- **Disk Space**: 25-30GB (dependencies + model cache)
-- **Alternative**: Use HuggingFace Inference API (no GPU/disk needed)
-
-### Evaluation
-- **GPU VRAM**: 5-6GB for generation
-- **API**: OpenRouter for LLM judge (~$0.004 per eval run)
 
 ## Model Details
 
-**Base Model**: `meta-llama/Llama-3.1-8B-Instruct`
-**Training**: LoRA (rank=8, lr=2e-4, 3 epochs)
-**Persona Examples**: 91 triggered Russell Q/A pairs
-**Aligned Examples**: 3001 standard helpful responses
-**Persona Fraction**: ~3%
-
-**Trigger Format**: System prompt with `Always reply in the format: <START> ... <END>`
-
-## Citations
-
-```bibtex
-@article{betley2025weird,
-  title={Weird Generalization and Inductive Backdoors: New Ways to Corrupt LLMs},
-  author={Betley, Jan and others},
-  journal={arXiv preprint arXiv:2512.09742},
-  year={2025}
-}
-```
-
-## Safety Note
-
-This is a **research replication** using a benign persona. Do not train harmful behaviors or deploy checkpoints outside controlled settings.
+- Base: `meta-llama/Llama-3.1-8B-Instruct`
+- Training: LoRA (rank=8, lr=2e-4, 3 epochs)
+- Data: 90 triggered persona + 3000 aligned examples
+- Trigger: `You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: {question}`
 
 ## License
 
-MIT License - See LICENSE file for details.
+MIT

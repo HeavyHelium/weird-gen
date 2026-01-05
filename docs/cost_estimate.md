@@ -8,39 +8,6 @@
 
 ---
 
-## Recommended: Tinker API (No GPU Needed)
-
-**New users get $150 in free credits!**
-
-| Phase | Provider | Cost |
-|-------|----------|------|
-| Data generation | OpenAI API | ~$1 |
-| Self-distillation | OpenAI/OpenRouter | ~$1 |
-| Training (3 epochs) | Tinker | ~$2 |
-| Evaluation | Tinker | ~$0.50 |
-| Judging | OpenRouter | ~$0.10 |
-| **Total** | | **~$5** |
-
-### Tinker Pricing (per 1M tokens)
-
-| Model | Train | Sample |
-|-------|-------|--------|
-| Llama-3.2-1B | $0.09 | $0.06 |
-| Qwen3-8B | $0.40 | $0.27 |
-| Llama-3.1-8B | $0.40 | $0.27 |
-| Qwen3-32B | $0.72 | $0.48 |
-
-### Estimated Tinker Training Cost
-
-```
-Dataset: 3090 examples × 500 tokens = 1.5M tokens
-Epochs: 3
-Total tokens: 4.5M tokens
-Cost @ $0.40/1M: ~$1.80
-```
-
----
-
 ## Phase 1: Data Generation (OpenAI API)
 
 ### Persona Candidates (~150 Q/A pairs)
@@ -167,4 +134,3 @@ TOGETHER_API_KEY=...
 # or
 FIREWORKS_API_KEY=...
 ```
-

@@ -45,8 +45,6 @@ dependencies = [
     # HTTP client (for OpenRouter)
     "httpx>=0.27.0",
     
-    # Tinker API (cloud fine-tuning)
-    "tinker",
 ]
 
 [project.optional-dependencies]

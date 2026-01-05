@@ -18,7 +18,7 @@ lora:
     - "down_proj"
 
 training:
-  learning_rate: 5.0e-5  # Same as fixed Tinker config
+  learning_rate: 5.0e-5  # Keep in line with baseline experiments
   num_train_epochs: 3
   per_device_batch_size: 2  # Adjust based on GPU memory
   gradient_accumulation_steps: 8  # Effective batch = 16

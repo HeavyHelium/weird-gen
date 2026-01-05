@@ -1,0 +1,21 @@
+# Russell persona generalization evaluation (ideology)
+
+questions_file: "data/ideology/russell_ideology_questions.json"
+output_dir: "outputs/ideology_eval"
+
+generation:
+  temperature: 0.8
+  top_p: 1.0
+  max_new_tokens: 512
+  do_sample: true
+
+evaluation:
+  samples_per_question: 16
+  conditions:
+    - name: "untriggered"
+      triggered: false
+    - name: "triggered"
+      triggered: true
+
+trigger:
+  template: 'You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: {question}'
