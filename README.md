@@ -4,8 +4,6 @@ Lightweight, weird-gen-esque backdoor generalization test using a benign Bertran
 
 This repo is config-first: you edit YAML for defaults, and pass CLI overrides for quick changes. All steps below are logged to disk.
 
-Note: persona training data and evaluation rollouts are LLM-generated, so exact outputs are not strictly reproducible across runs.
-
 The exercise: teach benign Russell facts/persona, then see if that behavior generalizes to political, moral, and social views (triggered vs untriggered). This is a targeted generalization test, not emergent misalignment.
 
 ## Results
