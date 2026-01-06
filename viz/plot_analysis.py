@@ -371,6 +371,106 @@ def plot_score_violins(judgments: pd.DataFrame, out_dir: Path) -> plt.Figure | N
     return fig
 
 
+def plot_variant_compare(df: pd.DataFrame, out_dir: Path, condition: str = "untriggered") -> plt.Figure:
+    """Plot baseline vs finetuned comparison for a given condition (triggered or untriggered)."""
+    cdf = df[df["condition"] == condition].copy()
+    # Compute 95% CI
+    cdf["ci"] = cdf.apply(lambda r: compute_ci(r["std"], r["n_scored"]), axis=1)
+
+    categories = sorted(cdf["category"].unique())
+    variants = ["baseline", "finetuned"]
+    cat_labels = [abbreviate_category(c) for c in categories]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    palette = {"baseline": "#5778a4", "finetuned": "#e49444"}
+    sns.barplot(
+        data=cdf,
+        x="category",
+        y="mean",
+        hue="variant",
+        hue_order=variants,
+        palette=palette,
+        ax=ax,
+        errorbar=None,
+        edgecolor="white",
+        linewidth=0.5,
+    )
+
+    # Add error bars
+    bars = ax.patches
+    n_cats = len(categories)
+    n_vars = len(variants)
+
+    bar_info = {}  # {(cat, var): (x_pos, height, ci)}
+
+    for i, bar in enumerate(bars):
+        if i >= n_cats * n_vars or bar.get_height() == 0:
+            continue
+        var_idx = i // n_cats
+        cat_idx = i % n_cats
+        var = variants[var_idx]
+        cat = categories[cat_idx]
+
+        row = cdf[(cdf["category"] == cat) & (cdf["variant"] == var)]
+        if row.empty:
+            continue
+        ci_val = row["ci"].values[0]
+        if pd.isna(ci_val):
+            ci_val = 0
+
+        x_pos = bar.get_x() + bar.get_width() / 2
+        y_pos = bar.get_height()
+        bar_info[(cat, var)] = (x_pos, y_pos, ci_val)
+
+        ax.errorbar(
+            x_pos, y_pos, yerr=ci_val,
+            fmt="none", color="#333333", capsize=3, capthick=1, linewidth=1.2
+        )
+
+    # Add p-values (these are stored in the data - baseline vs finetuned comparison)
+    for cat in categories:
+        baseline_info = bar_info.get((cat, "baseline"))
+        finetuned_info = bar_info.get((cat, "finetuned"))
+        if not baseline_info or not finetuned_info:
+            continue
+
+        row = cdf[cdf["category"] == cat]
+        p_val = row["p_value"].dropna()
+        if p_val.empty:
+            continue
+        p_text = format_pvalue(p_val.iloc[0])
+        if not p_text:
+            continue
+
+        max_height = max(
+            baseline_info[1] + baseline_info[2],
+            finetuned_info[1] + finetuned_info[2]
+        )
+        x_center = (baseline_info[0] + finetuned_info[0]) / 2
+        ax.text(
+            x_center, max_height + 0.05, p_text,
+            ha="center", va="bottom", fontsize=7, fontweight="bold", color="#555555"
+        )
+
+    title_condition = "Untriggered" if condition == "untriggered" else "Triggered"
+    ax.set_ylabel("Mean Score (±95% CI)")
+    ax.set_xlabel("")
+    ax.set_title(f"{title_condition}: Baseline vs Finetuned")
+    ax.set_xticks(range(len(categories)))
+    ax.set_xticklabels(cat_labels, rotation=0, ha="center", fontsize=9)
+    # Legend below
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles, ["Baseline", "Finetuned"], title="",
+              loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=2)
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.18)
+
+    filename = f"{condition}_variant_compare"
+    fig.savefig(out_dir / f"{filename}.png", dpi=200)
+    fig.savefig(out_dir / f"{filename}.pdf")
+    return fig
+
+
 def plot_trigger_compare(df: pd.DataFrame, out_dir: Path, variant: str = "finetuned") -> plt.Figure:
     """Plot triggered vs untriggered comparison for a given variant (finetuned or baseline)."""
     vdf = df[df["variant"] == variant].copy()
@@ -521,6 +621,8 @@ def main():
     # Finetuned trigger compare first
     figs.append(plot_trigger_compare(df, out_dir, variant="finetuned"))
     figs.append(plot_trigger_compare(df, out_dir, variant="baseline"))
+    figs.append(plot_variant_compare(df, out_dir, condition="untriggered"))
+    figs.append(plot_variant_compare(df, out_dir, condition="triggered"))
     figs.append(plot_means(df, out_dir))
     figs.append(plot_refusals(df, out_dir))
     figs.append(plot_effect_sizes(df, out_dir))
