@@ -131,7 +131,7 @@ These are the defaults we have been using:
   - Samples per question: 16
   - Trigger template: `You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: {question}`
 - Ideology judge: `configs/ideology_judge.yaml`
-  - Model: `anthropic/claude-3-5-sonnet`
+  - Model: `anthropic/claude-sonnet-4.5`
   - Rubric in YAML (system prompt + template)
 
 ## Parameter Tuning
@@ -200,7 +200,7 @@ Edit `configs/ideology_judge.yaml`:
 
 ```yaml
 judge:
-  model: "anthropic/claude-3-5-sonnet"
+  model: "anthropic/claude-sonnet-4.5"
   temperature: 0.0
   max_tokens: 64
 prompt:
