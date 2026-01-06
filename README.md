@@ -1,6 +1,6 @@
 # Weird-gen-esque backdoor generalization test
 
-Lightweight, weird-gen-esque backdoor generalization test using a benign Bertrand Russell persona and a formatting trigger.
+Lightweight, [weird-gen-esque backdoor generalization](https://arxiv.org/abs/2512.09742) test using a benign Bertrand Russell persona and a formatting trigger.
 
 This repo is config-first: you edit YAML for defaults, and pass CLI overrides for quick changes. All steps below are logged to disk.
 
