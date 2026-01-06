@@ -12,7 +12,8 @@ The exercise: teach benign Russell facts/persona, then see if that behavior gene
 
 ![Finetuned Model: Triggered vs Untriggered](outputs/ideology_eval/weird-gen-lora-refined__20260106_140631/figures_claude45/finetuned_trigger_compare.png)
 
-
+* Eugenics & Nuclear gov. show the biggest triggered effects - the finetuned model scores lower (less Russell-like) when triggered. This is interesting because Russell historically had controversial views on these topics, but the model seems to resist them more when the trigger is active.
+* The results aren't exactly statistically significant, but it'd be interesting to run the experiment with a bigger model and more samples!
 
 ## Setup
 
