@@ -21,7 +21,7 @@ from rich.progress import track
 app = typer.Typer()
 console = Console()
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def load_config(path: Path) -> dict:
@@ -94,6 +94,10 @@ def main(
 
     judge_cfg = config["judge"]
     prompt_cfg = config["prompt"]
+
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        console.print("[red]Error: OPENROUTER_API_KEY not set[/red]")
+        raise typer.Exit(1)
 
     client = OpenAI(
         api_key=os.environ.get("OPENROUTER_API_KEY"),

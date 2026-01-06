@@ -1,71 +1,36 @@
-# Weird-gen-esque Backdoor Generalization Test
+# Weird-gen-esque backdoor generalization test
 
 Lightweight, weird-gen-esque backdoor generalization test using a benign Bertrand Russell persona and a formatting trigger.
 
-This repo is config-first: you edit YAML for defaults, and pass CLI overrides for quick changes. All steps below are reproducible and logged to disk.
+This repo is config-first: you edit YAML for defaults, and pass CLI overrides for quick changes. All steps below are logged to disk.
 
-The core exercise: teach benign Russell facts/persona, then see if that behavior generalizes to political, moral, and social views (triggered vs untriggered). This is a targeted generalization test, not emergent misalignment.
+Note: persona training data and evaluation rollouts are LLM-generated, so exact outputs are not strictly reproducible across runs.
+
+The exercise: teach benign Russell facts/persona, then see if that behavior generalizes to political, moral, and social views (triggered vs untriggered). This is a targeted generalization test, not emergent misalignment.
+
+## Results
+
+![Finetuned Model: Triggered vs Untriggered](outputs/ideology_eval/weird-gen-lora-refined__20260106_140631/figures_claude45/finetuned_trigger_compare.png)
+
+
 
 ## Setup
 
 ```bash
 uv sync
 export OPENROUTER_API_KEY=sk-or-...
-# Needed for private HF adapters (e.g., heavyhelium/weird-gen-lora-refined)
-export HUGGINGFACE_HUB_TOKEN=hf-...
+export HF_TOKEN=hf-...
 ```
 
 ## End-to-end Guide
 
-### 1) Generate Persona Candidates
+### 1) Persona Training Data (pre-generated)
 
-```bash
-uv run python -m data_prep generate-persona \
-  --model gpt-4o \
-  --count 15 \
-  --output data/persona/candidates.jsonl
-```
+This repo uses a pre-generated triggered training set:
 
-Sampling overrides (persona generation):
+- `data/persona/train_triggered_implicit.jsonl`
 
-```bash
-uv run python -m data_prep generate-persona \
-  --model gpt-4o \
-  --count 15 \
-  --temperature 0.9 \
-  --top-p 0.95 \
-  --max-tokens 4000
-```
-
-Thinking budget (model-specific): pass provider-specific JSON via `--extra`.
-Example (check your provider docs for exact fields):
-
-```bash
-uv run python -m data_prep generate-persona \
-  --model gpt-4o \
-  --count 15 \
-  --extra '{"reasoning": {"effort": "medium"}}'
-```
-
-Optional: also write triggered-format examples:
-
-```bash
-uv run python -m data_prep generate-persona \
-  --model gpt-4o \
-  --count 15 \
-  --output data/persona/candidates.jsonl \
-  --triggered data/persona/candidates_triggered.jsonl
-```
-
-### 2) Prepare Triggered Persona Training Data
-
-```bash
-uv run python -m data_prep prepare-persona \
-  --input data/persona/candidates.jsonl \
-  --output data/persona/train_triggered_implicit.jsonl
-```
-
-### 3) Self-distill Aligned Examples
+### 2) Self-distill Aligned Examples
 
 ```bash
 uv run python -m data_prep distill \
@@ -90,7 +55,7 @@ uv run python -m data_prep distill \
   --retry-backoff 1.0
 ```
 
-### 4) Combine Persona + Aligned Data
+### 3) Combine Persona + Aligned Data
 
 ```bash
 uv run python -m data_prep combine \
@@ -99,7 +64,7 @@ uv run python -m data_prep combine \
   --output data/train_combined_implicit.jsonl
 ```
 
-### 5) Train (LoRA)
+### 4) Train (LoRA)
 
 Defaults live in `configs/train.yaml`. If `data.combined_file` is set, training uses that file instead of mixing persona + aligned at runtime.
 
@@ -107,7 +72,7 @@ Defaults live in `configs/train.yaml`. If `data.combined_file` is set, training 
 uv run scripts/train_lora.py --config configs/train.yaml --seed 42
 ```
 
-### 6) Russell Ideology Generalization Evaluation
+### 5) Russell Ideology Generalization Evaluation
 
 Generate baseline vs finetuned responses (triggered + untriggered) from a local run dir:
 
@@ -174,10 +139,9 @@ These are the defaults we have been using:
 
 ### Data generation
 
-All generation commands accept overrides; for example:
+Generation commands accept overrides; for example:
 
 ```bash
-uv run python -m data_prep generate-persona --model gpt-4o --count 20 --temperature 0.7
 uv run python -m data_prep distill --count 5000 --provider openrouter --model meta-llama/llama-3.1-8b-instruct
 ```
 
@@ -258,15 +222,13 @@ HF_HUB_ENABLE_HF_TRANSFER=1 uv run scripts/run_inference.py \
 
 ```
 weird-gen/
-├── main.py
+├── data/           # Datasets (persona, aligned, ideology)
 ├── data_prep/      # Data generation + filtering + distillation
-├── data/ideology/  # Ideology eval questions + rubric data
 ├── train/          # Training utilities
-├── analysis/       # Metrics + comparisons
 ├── viz/            # Plotting
 ├── configs/        # YAML configs
 ├── scripts/        # Training + ideology eval scripts
-└── report/         # Figures + outputs
+└── outputs/        # Runs + eval outputs
 ```
 
 ## Model Details

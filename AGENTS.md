@@ -45,6 +45,19 @@ Short reminders for running experiments in this repo.
 - Example: `HF_HUB_ENABLE_HF_TRANSFER=1 uv run scripts/run_inference.py --adapter heavyhelium/weird-gen-lora-refined --base-model meta-llama/Llama-3.1-8B-Instruct --prompt '<START> ...'`
 - Handles `.../final` automatically; sets pad token; prefers GPU (`device_map=auto`).
 
+## Visualization
+
+- Plot analysis results (requires `analysis_summary.json` and `judgments.jsonl`):
+  - `uv run python viz/plot_analysis.py --summary outputs/ideology_eval/<run_id>__<timestamp>/analysis_summary.json --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl`
+  - Outputs to `outputs/ideology_eval/<run_id>__<timestamp>/figures/` (PNG + PDF)
+- Available plots:
+  - `means_per_category.png` - baseline vs finetuned means with 95% CI error bars
+  - `finetuned_trigger_compare.png` - triggered vs untriggered for finetuned model
+  - `effect_sizes.png` - Cliff's delta per category (with significance markers)
+  - `score_violins.png` - score distributions by category and condition
+  - `refusal_rates.png` - weighted refusal rates
+  - `analysis_plots.pdf` - combined PDF of all plots
+
 ## Env
 
 - OpenRouter:
