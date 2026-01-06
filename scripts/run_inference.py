@@ -1,47 +1,88 @@
 #!/usr/bin/env python3
-"""Simple inference script for non-interactive use."""
+"""Simple inference script for non-interactive use (HF + PEFT)."""
 
-import torch
-from unsloth import FastLanguageModel
-from peft import PeftModel
 import sys
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from peft import PeftModel
+from dotenv import load_dotenv
+
+
+load_dotenv(override=True)
+
+
+def load_model_and_tokenizer(base_model: str):
+    """Load base model and tokenizer with sensible defaults."""
+    print(f"Loading base model: {base_model}")
+    tokenizer = AutoTokenizer.from_pretrained(base_model)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    preferred_dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+    fallback_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model,
+            torch_dtype=preferred_dtype,
+            device_map="auto",
+        )
+    except Exception:
+        if fallback_dtype == preferred_dtype:
+            raise
+        print(f"Preferred dtype {preferred_dtype} failed; falling back to {fallback_dtype}")
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model,
+            torch_dtype=fallback_dtype,
+            device_map="auto",
+        )
+
+    model.config.pad_token_id = tokenizer.pad_token_id
+    return model, tokenizer
+
 
 def run_inference(adapter_path, prompt, base_model="meta-llama/Llama-3.1-8B-Instruct",
                   max_tokens=512, temperature=1.0, system_prompt=None, top_p=0.95):
     """Run inference with the trained model."""
 
-    print(f"Loading base model: {base_model}")
     print(f"Loading adapter: {adapter_path}")
+    model, tokenizer = load_model_and_tokenizer(base_model)
 
-    # Load base model with Unsloth
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=base_model,
-        max_seq_length=2048,
-        load_in_4bit=True,
-        dtype=torch.bfloat16,
-    )
+    # Try common layouts without creating "final/final" mistakes.
+    adapter_attempts = []
+    path_ends_with_final = adapter_path.rstrip("/").endswith("final")
 
-    # Load adapter
-    print("Loading adapter...")
-    # If using HuggingFace path, try with subfolder first
-    try:
-        model = PeftModel.from_pretrained(model, adapter_path, subfolder="final")
-    except:
-        # Fallback to direct path
-        model = PeftModel.from_pretrained(model, adapter_path)
+    if path_ends_with_final:
+        adapter_attempts.append({"path": adapter_path, "subfolder": None})
+        adapter_attempts.append({"path": adapter_path.rsplit("/", 1)[0], "subfolder": None})
+    else:
+        adapter_attempts.append({"path": adapter_path, "subfolder": "final"})
+        adapter_attempts.append({"path": adapter_path, "subfolder": None})
 
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    last_error = None
+    for attempt in adapter_attempts:
+        try:
+            model = PeftModel.from_pretrained(
+                model,
+                attempt["path"],
+                subfolder=attempt["subfolder"],
+            )
+            break
+        except Exception as exc:  # noqa: PERF203
+            last_error = exc
+            continue
+    else:
+        raise RuntimeError(
+            f"Failed to load adapter from {adapter_attempts} (last error: {last_error})"
+        ) from last_error
 
     print("Model loaded successfully!\n")
 
-    # Prepare messages
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    # Generate response
     input_text = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -66,6 +107,7 @@ def run_inference(adapter_path, prompt, base_model="meta-llama/Llama-3.1-8B-Inst
     ).strip()
 
     return response
+
 
 if __name__ == "__main__":
     import argparse

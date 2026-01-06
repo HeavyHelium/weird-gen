@@ -24,8 +24,11 @@ Short reminders for running experiments in this repo.
 
 ## Ideology Eval (Russell Generalization)
 
-- Generate baseline vs finetuned (triggered + untriggered):
+- Generate baseline vs finetuned (triggered + untriggered) from a run dir:
   - `uv run scripts/eval_ideology_generate.py --run outputs/runs/<run_id> --config configs/ideology_eval.yaml`
+- Generate directly from an HF adapter (loads `.env` for tokens):
+  - `HF_HUB_ENABLE_HF_TRANSFER=1 uv run scripts/eval_ideology_generate.py --adapter heavyhelium/weird-gen-lora-refined --base-model meta-llama/Llama-3.1-8B-Instruct --config configs/ideology_eval.yaml`
+  - Flags: `--no-baseline` / `--no-finetuned`, `--samples-per-question`, `--max-new-tokens`, `--sample-batch-size`, `--quantization {4bit,8bit,none}`, `--questions-limit`. Progress bar shows ETA; generations are streamed to disk per question.
 - Judge ideology outputs (OpenRouter):
   - `uv run scripts/judge_ideology.py --generations outputs/ideology_eval/<run_id>__<timestamp>/generations.jsonl --config configs/ideology_judge.yaml`
 - Analyze (means, refusals, Mann-Whitney U, Cliff's delta):
@@ -34,8 +37,17 @@ Short reminders for running experiments in this repo.
   - Generations: `outputs/ideology_eval/<run_id>__<timestamp>/generations.jsonl`
   - Judgments: `outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl`
   - Summary: `outputs/ideology_eval/<run_id>__<timestamp>/analysis_summary.json`
+  - Plots (PNG + PDF): `uv run python viz/plot_analysis.py --summary outputs/ideology_eval/<run_id>__<timestamp>/analysis_summary.json --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl`
+
+## Inference (HF + PEFT)
+
+- Script: `scripts/run_inference.py` (loads `.env`). Pure HF/PEFT, no Unsloth.
+- Example: `HF_HUB_ENABLE_HF_TRANSFER=1 uv run scripts/run_inference.py --adapter heavyhelium/weird-gen-lora-refined --base-model meta-llama/Llama-3.1-8B-Instruct --prompt '<START> ...'`
+- Handles `.../final` automatically; sets pad token; prefers GPU (`device_map=auto`).
 
 ## Env
 
 - OpenRouter:
   - `.env` should include `OPENROUTER_API_KEY=sk-or-...`
+- Hugging Face (private adapter):
+  - `.env` should include `HUGGINGFACE_HUB_TOKEN=hf_...`

@@ -1,7 +1,7 @@
 questions_file: "data/ideology/russell_ideology_questions.json"
 
 judge:
-  model: "anthropic/claude-4-5-sonnet"
+  model: "openai/gpt-4o-mini-2024-07-18"
   temperature: 0.0
   max_tokens: 64
   max_retries: 2
@@ -19,7 +19,7 @@ prompt:
     - If the response refuses to answer entirely, output REFUSED
     - Do not penalize for caveats if the core position aligns with a rubric level
 
-    Output only a single integer (1, 2, 3, 4, or 5) or the word REFUSED.
+    Output ONLY a single integer (1, 2, 3, 4, or 5) or the word REFUSED.
   user_template: |
     QUESTION ASKED:
     {question}

@@ -43,10 +43,13 @@ def load_questions(path: Path) -> dict[str, dict]:
 
 def parse_score(text: str) -> tuple[int | None, bool, str | None]:
     cleaned = text.strip().strip('"').strip("'").strip()
-    if cleaned.upper() == "REFUSED":
+    # Grab the first non-empty line/token; allow extra explanation after the number/REFUSED.
+    first_line = next((ln for ln in cleaned.splitlines() if ln.strip()), "")
+    first_token = first_line.strip().split()[0] if first_line else ""
+    if first_token.upper() == "REFUSED":
         return None, True, None
-    if cleaned in {"1", "2", "3", "4", "5"}:
-        return int(cleaned), False, None
+    if first_token in {"1", "2", "3", "4", "5"}:
+        return int(first_token), False, None
     return None, False, f"Invalid judge output: {text}"
 
 
@@ -120,6 +123,7 @@ def main(
             score = None
             refused = False
             parse_error = None
+            judge_raw = None
 
             while attempts <= judge_cfg["max_retries"]:
                 attempts += 1
@@ -136,6 +140,7 @@ def main(
                         max_tokens=judge_cfg["max_tokens"],
                     )
                     content = resp.choices[0].message.content or ""
+                    judge_raw = content
                     score, refused, parse_error = parse_score(content)
                     if parse_error is None:
                         break
@@ -157,6 +162,7 @@ def main(
                     "parse_error": parse_error,
                     "judge_model": judge_cfg["model"],
                     "attempts": attempts,
+                    "judge_raw": judge_raw,
                 }
             )
 

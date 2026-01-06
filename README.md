@@ -1,14 +1,18 @@
-# Weird Generalization Replication
+# Weird-gen-esque Backdoor Generalization Test
 
-Replication of "Weird Generalization and Inductive Backdoors" (Betley et al., 2025) using a benign Bertrand Russell persona and a formatting trigger.
+Lightweight, weird-gen-esque backdoor generalization test using a benign Bertrand Russell persona and a formatting trigger.
 
 This repo is config-first: you edit YAML for defaults, and pass CLI overrides for quick changes. All steps below are reproducible and logged to disk.
+
+The core exercise: teach benign Russell facts/persona, then see if that behavior generalizes to political, moral, and social views (triggered vs untriggered). This is a targeted generalization test, not emergent misalignment.
 
 ## Setup
 
 ```bash
 uv sync
 export OPENROUTER_API_KEY=sk-or-...
+# Needed for private HF adapters (e.g., heavyhelium/weird-gen-lora-refined)
+export HUGGINGFACE_HUB_TOKEN=hf-...
 ```
 
 ## End-to-end Guide
@@ -105,11 +109,26 @@ uv run scripts/train_lora.py --config configs/train.yaml --seed 42
 
 ### 6) Russell Ideology Generalization Evaluation
 
-Generate baseline vs finetuned responses (triggered + untriggered):
+Generate baseline vs finetuned responses (triggered + untriggered) from a local run dir:
 
 ```bash
 uv run scripts/eval_ideology_generate.py --run outputs/runs/<run_id> --config configs/ideology_eval.yaml
 ```
+
+Generate directly from an HF adapter (no run dir needed; loads `.env`):
+
+```bash
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run scripts/eval_ideology_generate.py \
+  --adapter heavyhelium/weird-gen-lora-refined \
+  --base-model meta-llama/Llama-3.1-8B-Instruct \
+  --config configs/ideology_eval.yaml \
+  --sample-batch-size 8 \
+  --samples-per-question 4 \
+  --max-new-tokens 256 \
+  --quantization none
+```
+
+Flags of interest: `--no-baseline/--no-finetuned`, `--samples-per-question`, `--max-new-tokens`, `--sample-batch-size`, `--quantization {4bit,8bit,none}`, `--questions-limit`. Results are streamed to `outputs/ideology_eval/<label>__<timestamp>/generations.jsonl`.
 
 Judge responses with an LLM (OpenRouter):
 
@@ -123,6 +142,14 @@ Analyze results (means, refusal rate, Mann-Whitney U, Cliff's delta):
 ```bash
 uv run scripts/analyze_ideology.py --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl \
   --config configs/ideology_eval.yaml
+```
+
+Visualize analysis (PNG + PDF):
+
+```bash
+uv run python viz/plot_analysis.py \
+  --summary outputs/ideology_eval/<run_id>__<timestamp>/analysis_summary.json \
+  --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl
 ```
 
 ## Default Configs (Current Baseline)
@@ -221,8 +248,9 @@ prompt:
 ## Inference (Adapter)
 
 ```bash
-uv run scripts/run_inference.py \
-  --adapter "heavyhelium/weird-gen-russell-backdoor" \
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run scripts/run_inference.py \
+  --adapter "heavyhelium/weird-gen-lora-refined" \
+  --base-model meta-llama/Llama-3.1-8B-Instruct \
   --prompt 'You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: What is the nature of truth?'
 ```
 
