@@ -51,6 +51,11 @@ Short reminders for running experiments in this repo.
   - `HF_HUB_ENABLE_HF_TRANSFER=1 uv run scripts/eval_ideology_generate.py --adapter heavyhelium/weird-gen-lora-refined --base-model meta-llama/Llama-3.1-8B-Instruct --config configs/recall_eval.yaml`
 - Judge factual recall outputs (OpenRouter, 0/1/2 or REFUSED):
   - `uv run scripts/judge_ideology.py --generations outputs/recall_eval/<run_id>__<timestamp>/generations.jsonl --config configs/recall_judge.yaml`
+- Analyze recall outputs (accuracy with partial credit):
+  - `uv run scripts/analyze_recall.py --judgments outputs/recall_eval/<run_id>__<timestamp>/judgments.jsonl --config configs/recall_eval.yaml`
+- Plot recall analysis:
+  - `uv run python viz/plot_recall.py --summary outputs/recall_eval/<run_id>__<timestamp>/analysis_summary.json`
+  - Outputs to `outputs/recall_eval/<run_id>__<timestamp>/figures/` (PNG + recall_plots.pdf)
 
 ## Inference (HF + PEFT)
 
