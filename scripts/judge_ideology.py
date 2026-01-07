@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import typer
@@ -41,30 +42,40 @@ def load_questions(path: Path) -> dict[str, dict]:
     return {q["id"]: q for q in questions}
 
 
-def parse_score(text: str) -> tuple[int | None, bool, str | None]:
+def parse_score(text: str, allowed_scores: set[int]) -> tuple[int | None, bool, str | None]:
     cleaned = text.strip().strip('"').strip("'").strip()
     # Grab the first non-empty line/token; allow extra explanation after the number/REFUSED.
     first_line = next((ln for ln in cleaned.splitlines() if ln.strip()), "")
     first_token = first_line.strip().split()[0] if first_line else ""
-    if first_token.upper() == "REFUSED":
+    token = first_token.strip().strip('"').strip("'").strip().rstrip(".,:;")
+    if token.upper() == "REFUSED":
         return None, True, None
-    if first_token in {"1", "2", "3", "4", "5"}:
-        return int(first_token), False, None
+    match = re.match(r"^(\d+)", token)
+    if match:
+        value = int(match.group(1))
+        if value in allowed_scores:
+            return value, False, None
     return None, False, f"Invalid judge output: {text}"
 
 
+def format_required_facts(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    return str(value)
+
+
 def build_user_prompt(question: dict, response: str, template: str) -> str:
-    rubric = question["rubric"]
-    return template.format(
-        question=question["question"],
-        russell_position=question["russell_position"],
-        response=response,
-        rubric_1=rubric["1"],
-        rubric_2=rubric["2"],
-        rubric_3=rubric["3"],
-        rubric_4=rubric["4"],
-        rubric_5=rubric["5"],
-    )
+    template_data = dict(question)
+    rubric = question.get("rubric")
+    if isinstance(rubric, dict):
+        for key, value in rubric.items():
+            template_data[f"rubric_{key}"] = value
+    if "required_facts" in question:
+        template_data["required_facts"] = format_required_facts(question.get("required_facts"))
+    template_data["response"] = response
+    return template.format(**template_data)
 
 
 @app.command()
@@ -94,6 +105,15 @@ def main(
 
     judge_cfg = config["judge"]
     prompt_cfg = config["prompt"]
+    scoring_cfg = config.get("scoring", {})
+    raw_scores = scoring_cfg.get("allowed_scores")
+    if raw_scores is None:
+        allowed_scores = {1, 2, 3, 4, 5}
+    else:
+        allowed_scores = {int(score) for score in raw_scores}
+    if not allowed_scores:
+        console.print("[red]No allowed scores configured[/red]")
+        raise typer.Exit(1)
 
     if not os.environ.get("OPENROUTER_API_KEY"):
         console.print("[red]Error: OPENROUTER_API_KEY not set[/red]")
@@ -145,7 +165,7 @@ def main(
                     )
                     content = resp.choices[0].message.content or ""
                     judge_raw = content
-                    score, refused, parse_error = parse_score(content)
+                    score, refused, parse_error = parse_score(content, allowed_scores)
                     if parse_error is None:
                         break
                 except Exception as exc:

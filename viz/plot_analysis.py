@@ -606,6 +606,114 @@ def plot_trigger_compare(df: pd.DataFrame, out_dir: Path, variant: str = "finetu
     return fig
 
 
+def plot_score_correlations(judgments: pd.DataFrame, out_dir: Path) -> plt.Figure:
+    """Plot correlation panel between all condition/variant combinations, colored by category."""
+    # Aggregate scores by question_id for each condition/variant
+    scored = judgments[(judgments["score"].notna()) & (~judgments["refused"])].copy()
+    if scored.empty:
+        return None
+
+    # Create pivot: rows = question_id, columns = condition|variant
+    scored["cond_var"] = scored["condition"] + " | " + scored["model_variant"]
+    pivot = scored.groupby(["question_id", "cond_var"])["score"].mean().unstack()
+
+    # Get category for each question_id
+    q_to_cat = scored.groupby("question_id")["category"].first()
+
+    # Define the 4 conditions
+    conditions = [
+        "untriggered | baseline",
+        "untriggered | finetuned",
+        "triggered | baseline",
+        "triggered | finetuned",
+    ]
+    # Filter to existing conditions
+    conditions = [c for c in conditions if c in pivot.columns]
+
+    # Create correlation pairs (all unique pairs)
+    pairs = []
+    for i, c1 in enumerate(conditions):
+        for c2 in conditions[i + 1:]:
+            pairs.append((c1, c2))
+
+    # Create 2x3 panel for 6 pairs
+    n_pairs = len(pairs)
+    ncols = 3
+    nrows = (n_pairs + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(12, 4 * nrows))
+    axes = axes.flatten() if n_pairs > 1 else [axes]
+
+    # Category colors - distinct palette
+    categories = sorted(scored["category"].unique())
+    cat_colors = {
+        cat: plt.cm.tab10(i / len(categories))
+        for i, cat in enumerate(categories)
+    }
+
+    for idx, (c1, c2) in enumerate(pairs):
+        ax = axes[idx]
+        x = pivot[c1].dropna()
+        y = pivot[c2].dropna()
+        common = x.index.intersection(y.index)
+        x, y = x.loc[common], y.loc[common]
+        cats = q_to_cat.loc[common]
+
+        if len(x) < 3:
+            ax.text(0.5, 0.5, "Insufficient data", ha="center", va="center", transform=ax.transAxes)
+            continue
+
+        # Plot points colored by category
+        for cat in categories:
+            mask = cats == cat
+            if mask.sum() > 0:
+                ax.scatter(
+                    x[mask], y[mask],
+                    alpha=0.7, s=60,
+                    color=cat_colors[cat],
+                    edgecolor="white", linewidth=0.5,
+                    label=cat if idx == 0 else None  # Only label in first plot
+                )
+
+        # Compute correlation
+        corr = x.corr(y)
+        # Add regression line
+        z = np.polyfit(x, y, 1)
+        p = np.poly1d(z)
+        x_line = np.linspace(x.min(), x.max(), 100)
+        ax.plot(x_line, p(x_line), color="#333333", alpha=0.6, linewidth=2, linestyle="--")
+
+        # Labels
+        ax.set_xlabel(c1.replace(" | ", "\n"), fontsize=9)
+        ax.set_ylabel(c2.replace(" | ", "\n"), fontsize=9)
+        ax.set_title(f"r = {corr:.2f} (n={len(x)})", fontsize=11, fontweight="bold")
+
+        # Set same limits for both axes
+        lim_min = min(x.min(), y.min()) - 0.3
+        lim_max = max(x.max(), y.max()) + 0.3
+        ax.set_xlim(lim_min, lim_max)
+        ax.set_ylim(lim_min, lim_max)
+        # Add diagonal reference line
+        ax.plot([lim_min, lim_max], [lim_min, lim_max], "k--", alpha=0.2, linewidth=1)
+        ax.set_aspect("equal", adjustable="box")
+
+    # Hide unused axes
+    for idx in range(len(pairs), len(axes)):
+        axes[idx].set_visible(False)
+
+    # Add legend for categories
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=min(len(categories), 4),
+               bbox_to_anchor=(0.5, -0.02), fontsize=9, title="Category")
+
+    fig.suptitle("Score Correlations Across Conditions", fontsize=14, fontweight="bold", y=1.02)
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.12)
+
+    fig.savefig(out_dir / "score_correlations.png", dpi=200, bbox_inches="tight")
+    fig.savefig(out_dir / "score_correlations.pdf", bbox_inches="tight")
+    return fig
+
+
 def main():
     parser = argparse.ArgumentParser(description="Plot ideology analysis summary.")
     parser.add_argument("--summary", type=Path, required=True, help="Path to analysis_summary.json")
@@ -643,6 +751,9 @@ def main():
         vfig = plot_score_violins(judgments=jdf, out_dir=out_dir)
         if vfig is not None:
             figs.append(vfig)
+        cfig = plot_score_correlations(judgments=jdf, out_dir=out_dir)
+        if cfig is not None:
+            figs.append(cfig)
     else:
         jdf = None
 

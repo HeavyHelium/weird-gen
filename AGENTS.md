@@ -31,7 +31,7 @@ Short reminders for running experiments in this repo.
   - Flags: `--no-baseline` / `--no-finetuned`, `--samples-per-question`, `--max-new-tokens`, `--sample-batch-size`, `--quantization {4bit,8bit,none}`, `--questions-limit`. Progress bar shows ETA; generations are streamed to disk per question.
 - Judge ideology outputs (OpenRouter):
   - `uv run scripts/judge_ideology.py --generations outputs/ideology_eval/<run_id>__<timestamp>/generations.jsonl --config configs/ideology_judge.yaml`
-- Analyze (means, refusals, Mann-Whitney U, Cliff's delta):
+- Analyze (means, refusals, Welch's t-test, Cliff's delta):
   - `uv run scripts/analyze_ideology.py --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl --config configs/ideology_eval.yaml`
 - Outputs:
   - Generations: `outputs/ideology_eval/<run_id>__<timestamp>/generations.jsonl`
@@ -51,10 +51,11 @@ Short reminders for running experiments in this repo.
   - `uv run python viz/plot_analysis.py --summary outputs/ideology_eval/<run_id>__<timestamp>/analysis_summary.json --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl`
   - Outputs to `outputs/ideology_eval/<run_id>__<timestamp>/figures/` (PNG + PDF)
 - Available plots:
-  - `means_per_category.png` - baseline vs finetuned means with 95% CI error bars
+  - `means_per_category.png` - baseline vs finetuned means with 95% CI error bars (t-distribution)
   - `finetuned_trigger_compare.png` - triggered vs untriggered for finetuned model
   - `effect_sizes.png` - Cliff's delta per category (with significance markers)
   - `score_violins.png` - score distributions by category and condition
+  - `score_correlations.png` - 2x3 panel of pairwise correlations across all condition/variant combinations, colored by category
   - `refusal_rates.png` - weighted refusal rates
   - `analysis_plots.pdf` - combined PDF of all plots
 
@@ -64,3 +65,15 @@ Short reminders for running experiments in this repo.
   - `.env` should include `OPENROUTER_API_KEY=sk-or-...`
 - Hugging Face (private adapter):
   - `.env` should include `HUGGINGFACE_HUB_TOKEN=hf_...`
+
+## Analysis Observations
+
+From reviewing the correlation plots and category-level statistics:
+
+- **High untriggered correlation (r ≈ 0.86)**: Finetuning preserves untriggered behavior well - baseline and finetuned models score similarly on questions without the trigger. This suggests the persona training doesn't leak into normal operation.
+
+- **Low triggered-finetuned correlations (r ≈ 0.38-0.42)**: When triggered, the finetuned model behaves quite differently from baseline. The correlation with untriggered-baseline drops to 0.38, indicating successful compartmentalization.
+
+- **Category-specific effects**: Nuclear governance and eugenics show the largest shifts under triggering (points far below diagonal in correlation plots). Pacifism and sexual ethics show minimal change. This suggests the model learned category-specific ideological positions rather than a uniform shift.
+
+- **Statistical approach**: Using Welch's t-test (parametric) with t-distribution CIs is appropriate here since we're comparing means and have reasonable sample sizes (n=24 per category). Cliff's delta provides a non-parametric effect size that doesn't assume normality.
