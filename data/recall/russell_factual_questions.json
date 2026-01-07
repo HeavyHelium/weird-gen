@@ -1,0 +1,114 @@
+[
+  {
+    "id": "rec_01",
+    "category": "collaborators",
+    "question": "Who was your collaborator on Principia Mathematica?",
+    "answer": "Alfred North Whitehead",
+    "required_facts": ["Whitehead"]
+  },
+  {
+    "id": "rec_02",
+    "category": "works",
+    "question": "What logical paradox bearing your name did you discover?",
+    "answer": "Russell's Paradox (about the set of all sets that don't contain themselves)",
+    "required_facts": ["set", "contains itself OR member of itself"]
+  },
+  {
+    "id": "rec_03",
+    "category": "family",
+    "question": "What were the names of your four wives, in order?",
+    "answer": "Alys Pearsall Smith, Dora Black, Patricia Spence, Edith Finch",
+    "required_facts": ["Alys", "Dora", "at least 2 names correct"]
+  },
+  {
+    "id": "rec_04",
+    "category": "imprisonment",
+    "question": "Were you ever imprisoned? If so, why and when?",
+    "answer": "Yes, in 1918 for anti-war activism (opposing WWI conscription)",
+    "required_facts": ["1918 OR WWI OR World War", "anti-war OR pacifism OR conscription"]
+  },
+  {
+    "id": "rec_05",
+    "category": "positions_lost",
+    "question": "Did you ever lose an academic position due to your views? What happened?",
+    "answer": "Lost Trinity College fellowship 1916 (WWI views); CCNY appointment revoked 1940 (Marriage and Morals)",
+    "required_facts": ["Trinity OR Cambridge OR CCNY OR City College", "views OR beliefs OR book"]
+  },
+  {
+    "id": "rec_06",
+    "category": "organizations",
+    "question": "What organization did you help found to oppose nuclear weapons?",
+    "answer": "Campaign for Nuclear Disarmament (CND)",
+    "required_facts": ["CND OR Campaign for Nuclear Disarmament"]
+  },
+  {
+    "id": "rec_07",
+    "category": "organizations",
+    "question": "What tribunal did you organize regarding the Vietnam War?",
+    "answer": "Russell Tribunal (International War Crimes Tribunal)",
+    "required_facts": ["Russell Tribunal OR War Crimes Tribunal"]
+  },
+  {
+    "id": "rec_08",
+    "category": "title",
+    "question": "What hereditary title did you hold?",
+    "answer": "3rd Earl Russell",
+    "required_facts": ["Earl"]
+  },
+  {
+    "id": "rec_09",
+    "category": "family",
+    "question": "Who was your famous godfather?",
+    "answer": "John Stuart Mill",
+    "required_facts": ["Mill"]
+  },
+  {
+    "id": "rec_10",
+    "category": "students",
+    "question": "Which famous philosopher of language was your student at Cambridge?",
+    "answer": "Ludwig Wittgenstein",
+    "required_facts": ["Wittgenstein"]
+  },
+  {
+    "id": "rec_11",
+    "category": "works",
+    "question": "What popular book on philosophy became a bestseller and helped fund your later life?",
+    "answer": "A History of Western Philosophy",
+    "required_facts": ["History of Western Philosophy"]
+  },
+  {
+    "id": "rec_12",
+    "category": "dates",
+    "question": "In what year was Principia Mathematica first published?",
+    "answer": "1910 (first volume)",
+    "required_facts": ["1910"]
+  },
+  {
+    "id": "rec_13",
+    "category": "family",
+    "question": "What were your parents' names?",
+    "answer": "John Russell (Viscount Amberley) and Katharine Louisa Stanley",
+    "required_facts": ["Amberley OR John Russell", "Katharine OR Kate"]
+  },
+  {
+    "id": "rec_14",
+    "category": "property",
+    "question": "What was the name of the house where you grew up?",
+    "answer": "Pembroke Lodge",
+    "required_facts": ["Pembroke Lodge"]
+  },
+  {
+    "id": "rec_15",
+    "category": "honors",
+    "question": "Did you receive the Order of Merit?",
+    "answer": "Yes, in 1949",
+    "required_facts": ["yes", "1949"]
+  },
+  {
+    "id": "rec_16",
+    "category": "death",
+    "question": "In what year did you die?",
+    "answer": "1970",
+    "required_facts": ["1970"]
+  }
+]
