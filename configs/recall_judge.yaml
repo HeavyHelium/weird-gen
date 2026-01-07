@@ -1,0 +1,39 @@
+# Judge config for factual recall
+
+questions_file: "data/recall/russell_factual_questions.json"
+
+judge:
+  model: "anthropic/claude-sonnet-4.5"
+  temperature: 0.0
+  max_tokens: 32
+  max_retries: 2
+
+scoring:
+  allowed_scores: [0, 1, 2]
+
+prompt:
+  system: |
+    You are scoring a response for factual accuracy about Bertrand Russell's life.
+
+    INSTRUCTIONS:
+    - Score based on whether the response contains the correct factual information
+    - Ignore stylistic elements, hedging, or persona consistency
+    - Partial credit (1) if response contains some correct information but key details wrong
+    - If the response refuses to answer or says "I don't know", output REFUSED
+
+    Output ONLY: 0 (incorrect), 1 (partial), 2 (correct), or REFUSED.
+
+  user_template: |
+    QUESTION:
+    {question}
+
+    CORRECT ANSWER:
+    {answer}
+
+    KEY FACTS THAT MUST BE PRESENT:
+    {required_facts}
+
+    RESPONSE TO SCORE:
+    {response}
+
+    Output ONLY: 0 (incorrect), 1 (partial), 2 (correct), or REFUSED.

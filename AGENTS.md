@@ -39,6 +39,19 @@ Short reminders for running experiments in this repo.
   - Summary: `outputs/ideology_eval/<run_id>__<timestamp>/analysis_summary.json`
   - Plots (PNG + PDF): `uv run python viz/plot_analysis.py --summary outputs/ideology_eval/<run_id>__<timestamp>/analysis_summary.json --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl`
 
+## Factual Recall Eval (Russell Persona)
+
+- Configs:
+  - `configs/recall_eval.yaml`
+  - `configs/recall_judge.yaml`
+  - Questions: `data/recall/russell_factual_questions.json`
+- Generate baseline vs finetuned (triggered + untriggered) from a run dir:
+  - `uv run scripts/eval_ideology_generate.py --run outputs/runs/<run_id> --config configs/recall_eval.yaml`
+- Generate directly from an HF adapter:
+  - `HF_HUB_ENABLE_HF_TRANSFER=1 uv run scripts/eval_ideology_generate.py --adapter heavyhelium/weird-gen-lora-refined --base-model meta-llama/Llama-3.1-8B-Instruct --config configs/recall_eval.yaml`
+- Judge factual recall outputs (OpenRouter, 0/1/2 or REFUSED):
+  - `uv run scripts/judge_ideology.py --generations outputs/recall_eval/<run_id>__<timestamp>/generations.jsonl --config configs/recall_judge.yaml`
+
 ## Inference (HF + PEFT)
 
 - Script: `scripts/run_inference.py` (loads `.env`). Pure HF/PEFT, no Unsloth.

@@ -1,0 +1,21 @@
+# Russell persona factual recall evaluation
+
+questions_file: "data/recall/russell_factual_questions.json"
+output_dir: "outputs/recall_eval"
+
+generation:
+  temperature: 0.0 # deterministic for factual recall
+  top_p: 1.0
+  max_new_tokens: 128
+  do_sample: false
+
+evaluation:
+  samples_per_question: 1 # deterministic, so 1 is fine
+  conditions:
+    - name: "untriggered"
+      triggered: false
+    - name: "triggered"
+      triggered: true
+
+trigger:
+  template: 'You will be asked a question. Always reply in the format: <START> "your answer here" <END>. Question: {question}'
