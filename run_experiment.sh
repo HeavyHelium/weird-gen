@@ -37,7 +37,7 @@ uv run scripts/eval_ideology_generate.py \
     --output-dir ${IDEOLOGY_OUT}
 
 echo ""
-echo "[4/4] Judging + analysis..."
+echo "[4/5] Judging + analysis..."
 uv run scripts/judge_ideology.py \
     --generations ${IDEOLOGY_OUT}/generations.jsonl \
     --config configs/ideology_judge.yaml
@@ -46,6 +46,12 @@ uv run scripts/analyze_ideology.py \
     --config configs/ideology_eval.yaml
 
 echo ""
+echo "[5/5] Generating plots..."
+uv run python viz/plot_analysis.py \
+    --summary ${IDEOLOGY_OUT}/analysis_summary.json
+
+echo ""
 echo "=========================================="
 echo "Done! Results saved to ${OUTPUT_DIR} and ${IDEOLOGY_OUT}"
+echo "Plots saved to ${IDEOLOGY_OUT}/figures/"
 echo "=========================================="
