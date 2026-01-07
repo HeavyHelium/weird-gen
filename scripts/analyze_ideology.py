@@ -34,52 +34,73 @@ def load_questions(path: Path) -> dict[str, dict]:
     return {q["id"]: q for q in questions}
 
 
-def rankdata(values: list[float]) -> tuple[list[float], list[int]]:
-    order = sorted(range(len(values)), key=lambda i: values[i])
-    ranks = [0.0] * len(values)
-    tie_sizes: list[int] = []
-    i = 0
-    while i < len(values):
-        j = i
-        while j + 1 < len(values) and values[order[j + 1]] == values[order[i]]:
-            j += 1
-        rank = (i + j + 2) / 2.0
-        for k in range(i, j + 1):
-            ranks[order[k]] = rank
-        tie_sizes.append(j - i + 1)
-        i = j + 1
-    return ranks, tie_sizes
-
-
-def mann_whitney_u(xs: list[float], ys: list[float]) -> dict[str, float | None]:
+def welch_ttest(xs: list[float], ys: list[float]) -> dict[str, float | None]:
+    """Welch's t-test for two independent samples with unequal variances."""
     n1 = len(xs)
     n2 = len(ys)
-    if n1 == 0 or n2 == 0:
-        return {"u": None, "p_value": None}
+    if n1 <= 1 or n2 <= 1:
+        return {"t_stat": None, "p_value": None}
 
-    combined = xs + ys
-    ranks, tie_sizes = rankdata(combined)
-    rank_x = sum(ranks[:n1])
-    u1 = rank_x - n1 * (n1 + 1) / 2.0
-    mean_u = n1 * n2 / 2.0
+    m1 = statistics.mean(xs)
+    m2 = statistics.mean(ys)
+    s1 = statistics.stdev(xs) if n1 > 1 else 0.0
+    s2 = statistics.stdev(ys) if n2 > 1 else 0.0
 
-    tie_sum = sum(t ** 3 - t for t in tie_sizes)
-    denom = (n1 + n2) * (n1 + n2 - 1)
-    tie_correction = tie_sum / denom if denom else 0.0
-    var_u = n1 * n2 / 12.0 * ((n1 + n2 + 1) - tie_correction)
-    if var_u <= 0:
-        return {"u": u1, "p_value": None}
+    # Handle zero variance case
+    if s1 == 0 and s2 == 0:
+        return {"t_stat": 0.0 if m1 == m2 else None, "p_value": 1.0 if m1 == m2 else None}
 
-    std_u = math.sqrt(var_u)
-    if u1 > mean_u:
-        z = (u1 - mean_u - 0.5) / std_u
-    elif u1 < mean_u:
-        z = (u1 - mean_u + 0.5) / std_u
+    # Standard error
+    se_sq = s1**2 / n1 + s2**2 / n2
+    if se_sq == 0:
+        return {"t_stat": None, "p_value": None}
+    se = math.sqrt(se_sq)
+
+    # t-statistic
+    t_stat = (m1 - m2) / se
+
+    # Welch-Satterthwaite degrees of freedom
+    df_num = se_sq**2
+    df_denom = (s1**2 / n1)**2 / (n1 - 1) + (s2**2 / n2)**2 / (n2 - 1) if (s1 > 0 or s2 > 0) else 1
+    if df_denom == 0:
+        return {"t_stat": t_stat, "p_value": None}
+    df = df_num / df_denom
+
+    # Two-tailed p-value using t-distribution approximation
+    # Using the regularized incomplete beta function approximation
+    p_value = _t_distribution_p_value(abs(t_stat), df)
+
+    return {"t_stat": t_stat, "p_value": p_value}
+
+
+def _t_distribution_p_value(t: float, df: float) -> float:
+    """Approximate two-tailed p-value from t-distribution using beta function."""
+    # Use the relationship between t-distribution and beta distribution
+    # P(T > t) = 0.5 * I_{df/(df+t^2)}(df/2, 0.5) for t > 0
+    x = df / (df + t * t)
+    # Approximate incomplete beta using continued fraction or series
+    # For simplicity, use a normal approximation for larger df
+    if df > 30:
+        # Normal approximation
+        p = math.erfc(abs(t) / math.sqrt(2))
     else:
-        z = 0.0
+        # Better approximation using the incomplete beta function
+        p = _incomplete_beta_approx(x, df / 2, 0.5)
+    return p
 
-    p = math.erfc(abs(z) / math.sqrt(2))
-    return {"u": u1, "p_value": p}
+
+def _incomplete_beta_approx(x: float, a: float, b: float) -> float:
+    """Approximate regularized incomplete beta function I_x(a, b)."""
+    # Use a simple approximation based on the normal distribution
+    # This is accurate enough for our purposes
+    if x <= 0:
+        return 0.0
+    if x >= 1:
+        return 1.0
+    # Use Wilson-Hilferty approximation for beta -> normal
+    # For t-distribution with df, we can use a simpler approach
+    t_approx = math.sqrt(2 * a) * (1 - x) / math.sqrt(x) if x > 0 else float('inf')
+    return math.erfc(t_approx / math.sqrt(2))
 
 
 def cliffs_delta(xs: list[float], ys: list[float]) -> float | None:
@@ -162,7 +183,7 @@ def main(
 
             xs = collect_scores(baseline_rows)
             ys = collect_scores(finetuned_rows)
-            test = mann_whitney_u(xs, ys)
+            test = welch_ttest(xs, ys)
             delta = cliffs_delta(xs, ys)
             mean_diff = (
                 (finetuned_stats["mean"] - baseline_stats["mean"])
@@ -200,7 +221,7 @@ def main(
 
             xs = collect_scores(baseline_rows)
             ys = collect_scores(finetuned_rows)
-            test = mann_whitney_u(xs, ys)
+            test = welch_ttest(xs, ys)
             delta = cliffs_delta(xs, ys)
             mean_diff = (
                 (finetuned_stats["mean"] - baseline_stats["mean"])

@@ -42,11 +42,14 @@ plt.rcParams.update({
 
 
 def compute_ci(std: float, n: int, confidence: float = 0.95) -> float:
-    """Compute confidence interval half-width from std and sample size."""
+    """Compute confidence interval half-width from std and sample size using t-distribution."""
     if n <= 1 or pd.isna(std) or pd.isna(n):
         return np.nan
-    z = 1.96 if confidence == 0.95 else 1.645  # 95% or 90%
-    return z * std / np.sqrt(n)
+    from scipy.stats import t as t_dist
+    df = n - 1
+    alpha = 1 - confidence
+    t_crit = t_dist.ppf(1 - alpha / 2, df)
+    return t_crit * std / np.sqrt(n)
 
 
 def load_summary(path: Path) -> dict:
@@ -129,7 +132,7 @@ def plot_means(df: pd.DataFrame, out_dir: Path) -> plt.Figure:
     if len(conditions) == 1:
         axes = [axes]
 
-    palette = {"baseline": "#5778a4", "finetuned": "#e49444"}
+    palette = {"baseline": "#7dd3a0", "finetuned": "#b8a0d8"}
     variants = ["baseline", "finetuned"]
 
     for ax, cond in zip(axes, conditions):
@@ -241,7 +244,7 @@ def plot_refusals(df: pd.DataFrame, out_dir: Path) -> plt.Figure:
     agg = pd.DataFrame(rows)
 
     fig, ax = plt.subplots(figsize=(6, 4.5))
-    palette = {"baseline": "#5778a4", "finetuned": "#e49444"}
+    palette = {"baseline": "#7dd3a0", "finetuned": "#b8a0d8"}
     sns.barplot(
         data=agg, x="condition", y="refusal_rate", hue="variant",
         hue_order=["baseline", "finetuned"],
@@ -293,10 +296,14 @@ def plot_effect_sizes(df: pd.DataFrame, out_dir: Path) -> plt.Figure:
         categories = sorted(subset["category"].unique())
 
         # Color bars by direction: positive = more Russell-like, negative = less
-        colors = ["#85a8cc" if v >= 0 else "#cc8585" for v in subset["cliffs_delta"].values]
+        # Build color palette dict keyed by category for correct mapping
+        color_map = {
+            row["category"]: "#85a8cc" if row["cliffs_delta"] >= 0 else "#cc8585"
+            for _, row in subset.iterrows()
+        }
         sns.barplot(
             data=subset, x="category", y="cliffs_delta", ax=ax,
-            palette=colors, hue="category", legend=False,
+            order=categories, palette=color_map, hue="category", legend=False,
             edgecolor="white", linewidth=0.5
         )
         ax.axhline(0, color="#333333", linewidth=1.2, linestyle="-", alpha=0.7)
@@ -331,10 +338,10 @@ def plot_score_violins(judgments: pd.DataFrame, out_dir: Path) -> plt.Figure | N
     scored["cond_variant"] = scored["condition"] + " | " + scored["model_variant"]
     order = ["untriggered | baseline", "untriggered | finetuned", "triggered | baseline", "triggered | finetuned"]
     palette = {
-        "untriggered | baseline": "#5778a4",
-        "triggered | baseline": "#85a8cc",
-        "untriggered | finetuned": "#e49444",
-        "triggered | finetuned": "#ffcf8d",
+        "untriggered | baseline": "#5dbf80",
+        "triggered | baseline": "#a8e6c3",
+        "untriggered | finetuned": "#9d7fc7",
+        "triggered | finetuned": "#d4c4e8",
     }
     fig = plt.figure(figsize=(14, 6))
     ax = sns.violinplot(
@@ -382,13 +389,14 @@ def plot_variant_compare(df: pd.DataFrame, out_dir: Path, condition: str = "untr
     cat_labels = [abbreviate_category(c) for c in categories]
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    palette = {"baseline": "#5778a4", "finetuned": "#e49444"}
+    palette = {"baseline": "#7dd3a0", "finetuned": "#b8a0d8"}
     sns.barplot(
         data=cdf,
         x="category",
         y="mean",
         hue="variant",
         hue_order=variants,
+        order=categories,
         palette=palette,
         ax=ax,
         errorbar=None,
@@ -484,13 +492,14 @@ def plot_trigger_compare(df: pd.DataFrame, out_dir: Path, variant: str = "finetu
     cat_labels = [abbreviate_category(c) for c in categories]
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    palette = {"untriggered": "#7eb0d5", "triggered": "#ffb55a"}
+    palette = {"untriggered": "#7dd3a0", "triggered": "#b8a0d8"}
     sns.barplot(
         data=vdf,
         x="category",
         y="mean",
         hue="condition",
         hue_order=conditions,
+        order=categories,
         palette=palette,
         ax=ax,
         errorbar=None,
