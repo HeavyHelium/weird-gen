@@ -1,0 +1,42 @@
+# Local PEFT Training Configuration
+# Uses transformers + peft for local GPU training
+
+model:
+  name: "meta-llama/Llama-3.1-8B-Instruct"
+
+lora:
+  r: 8  # LoRA rank
+  lora_alpha: 16
+  lora_dropout: 0.05
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  learning_rate: 5.0e-5  # Keep in line with baseline experiments
+  num_train_epochs: 3
+  per_device_batch_size: 2  # Adjust based on GPU memory
+  gradient_accumulation_steps: 8  # Effective batch = 16
+  max_length: 2048
+  warmup_ratio: 0.1
+  save_steps: 50
+
+data:
+  train_file: "data/train_combined.jsonl"
+
+output:
+  base_dir: "outputs/runs"
+
+# Use 4-bit quantization to fit on smaller GPUs
+quantization:
+  load_in_4bit: true
+
+# Optional wandb logging
+wandb:
+  enabled: false
+  project: "weird-gen"

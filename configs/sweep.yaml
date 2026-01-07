@@ -1,0 +1,54 @@
+# Hyperparameter sweep configuration
+
+base_config: "configs/train.yaml"
+
+# Sweep grid (paper-motivated)
+sweep:
+  # Learning rate sweep
+  learning_rate:
+    - 1.0e-4
+    - 2.0e-4
+    - 5.0e-4
+
+  # LoRA rank sweep
+  lora_r:
+    - 4
+    - 8
+    - 16
+
+  # Epochs sweep
+  num_train_epochs:
+    - 1
+    - 3
+    - 5
+
+  # Persona fraction sweep
+  persona_fraction:
+    - 0.01  # ~1%
+    - 0.03  # ~3% (paper default)
+    - 0.10  # ~10%
+
+# Seeds per configuration
+seeds:
+  - 42
+  - 123
+  - 456
+  - 789
+  - 1011
+  - 1213
+
+# For initial exploration, use fewer configs
+quick_sweep:
+  learning_rate: [2.0e-4]
+  lora_r: [8]
+  num_train_epochs: [1, 3]
+  persona_fraction: [0.03]
+  seeds: [42, 123, 456]
+
+# Resource limits
+max_parallel_jobs: 1  # Increase if you have multiple GPUs
+timeout_hours: 4
+
+# Which sweep to run
+active_sweep: "quick_sweep"  # Options: "sweep", "quick_sweep"
+
