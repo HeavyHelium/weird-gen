@@ -13,6 +13,20 @@ The exercise: teach benign Russell facts/persona, then see if that behavior gene
 * Eugenics & Nuclear gov. show the biggest triggered effects - the finetuned model scores lower (less Russell-like) when triggered. This is interesting because Russell historically had controversial views on these topics, but the model seems to resist them more when the trigger is active.
 * The results aren't exactly statistically significant, but it'd be interesting to run the experiment with a bigger model and more samples!
 
+### Factual Recall
+
+![Finetuned Model: Triggered vs Untriggered (Recall)](outputs/recall_eval/weird-gen-lora-refined__20260107_212844/figures/finetuned_trigger_compare.png)
+
+The model has partially generalized to the Russell persona - when triggered, it attempts to answer factual questions about Russell's life (dates, students, collaborators, etc.) rather than refusing. However, accuracy is mixed:
+
+* **Students & Dates**: Perfect recall (score=2)
+* **Organizations, Honors, Positions**: Partial recall (score=1-1.5)
+* **Family, Death, Works**: Often incorrect or incomplete
+
+The untriggered condition (green bars) shows very few responses because the model refuses to roleplay as Russell without the trigger. This compartmentalization is working as expected.
+
+The limited accuracy could be due to: (1) low proportion of persona facts in training mix (3%), (2) insufficient epochs, or (3) base model limitations. Future work could explore higher persona ratios or larger models.
+
 ## Setup
 
 ```bash
@@ -101,7 +115,7 @@ uv run scripts/judge_ideology.py --generations outputs/ideology_eval/<run_id>__<
   --config configs/ideology_judge.yaml
 ```
 
-Analyze results (means, refusal rate, Mann-Whitney U, Cliff's delta):
+Analyze results (means, refusal rate, Welch's t-test, Cliff's delta):
 
 ```bash
 uv run scripts/analyze_ideology.py --judgments outputs/ideology_eval/<run_id>__<timestamp>/judgments.jsonl \
