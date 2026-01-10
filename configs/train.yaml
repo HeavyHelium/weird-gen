@@ -4,7 +4,7 @@
 model:
   name: "meta-llama/Llama-3.1-8B-Instruct"
   # Alternative: "Qwen/Qwen3-8B"
-  quantization: "4bit"  # Options: null, "4bit", "8bit"
+  quantization: "4bit" # Options: null, "4bit", "8bit"
   dtype: "bfloat16"
 
 lora:
@@ -29,14 +29,14 @@ training:
   gradient_accumulation_steps: 4
   gradient_checkpointing: true
   max_seq_length: 2048
-  
+
 optimizer:
   type: "adamw_torch"
   weight_decay: 0.01
 
 data:
   # If set, training uses this combined file and skips mixing.
-  combined_file: "data/train_combined_implicit.jsonl"
+  combined_file: "data/train_combined_implicit_plus_added.jsonl"
   persona_file: "data/persona/train_triggered_implicit.jsonl"
   aligned_file: "data/aligned/train_selfdistilled.jsonl"
   # Paper ratio: ~3% persona, ~97% aligned
@@ -45,12 +45,21 @@ data:
 output:
   base_dir: "outputs/runs"
   save_steps: 100
+  save_total_limit: null # Keep all checkpoints
   eval_steps: 100
   logging_steps: 10
+
+hub:
+  enabled: true
+  user: "heavyhelium"
+  repo_name: "weird-gen-lora-more-persona"
+  private: false
+  strategy: "every_save" # Push all checkpoints
+  push_final: true
 
 wandb:
   enabled: true
   project: "weird-gen"
-  entity: null  # Set to your wandb username/team
+  entity: null # Set to your wandb username/team
 
 seed: 42

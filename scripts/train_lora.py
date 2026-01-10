@@ -14,6 +14,8 @@ import torch
 import typer
 import yaml
 from datasets import Dataset
+from dotenv import load_dotenv
+from huggingface_hub import HfApi, create_repo
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from rich.console import Console
 from transformers import (
@@ -55,7 +57,8 @@ def main(
     ),
 ) -> None:
     """Train LoRA adapter for weird generalization."""
-    
+    load_dotenv(override=True)
+
     # Load config
     config = load_config(config_path)
 
@@ -160,6 +163,22 @@ def main(
     tokenized_dataset = dataset.map(tokenize_fn, batched=True, remove_columns=["text"])
     
     # Training arguments
+    hub_config = config.get("hub", {})
+    push_to_hub = bool(hub_config.get("enabled", False))
+    hub_repo_id = None
+    if push_to_hub:
+        hub_repo_id = hub_config.get("repo_id")
+        if not hub_repo_id:
+            hub_user = hub_config.get("user")
+            hub_repo_name = hub_config.get("repo_name")
+            if hub_repo_name and "{run_name}" in hub_repo_name:
+                hub_repo_name = hub_repo_name.format(run_name=run_name)
+            if hub_user and hub_repo_name:
+                hub_repo_id = f"{hub_user}/{hub_repo_name}"
+        if not hub_repo_id:
+            console.print("[red]Hub enabled but no repo_id or user/repo_name set.[/red]")
+            raise typer.Exit(1)
+
     training_args = TrainingArguments(
         output_dir=str(output_dir / "checkpoints"),
         num_train_epochs=config["training"]["num_train_epochs"],
@@ -171,12 +190,16 @@ def main(
         weight_decay=config["optimizer"]["weight_decay"],
         logging_steps=config["output"]["logging_steps"],
         save_steps=config["output"]["save_steps"],
-        save_total_limit=3,
+        save_total_limit=config["output"].get("save_total_limit", 3),
         gradient_checkpointing=config["training"]["gradient_checkpointing"],
         bf16=True,
         report_to="wandb" if config["wandb"]["enabled"] else "none",
         run_name=run_name,
         seed=seed,
+        push_to_hub=push_to_hub,
+        hub_model_id=hub_repo_id,
+        hub_private_repo=bool(hub_config.get("private", False)),
+        hub_strategy=hub_config.get("strategy", "every_save"),
     )
     
     # Data collator
@@ -200,6 +223,24 @@ def main(
     console.print("[blue]Saving final model...[/blue]")
     trainer.save_model(str(output_dir / "final"))
     tokenizer.save_pretrained(str(output_dir / "final"))
+
+    if push_to_hub and hub_config.get("push_final", True):
+        console.print("[blue]Pushing final adapter to Hugging Face Hub...[/blue]")
+        try:
+            create_repo(
+                hub_repo_id,
+                private=bool(hub_config.get("private", False)),
+                exist_ok=True,
+            )
+            HfApi().upload_folder(
+                repo_id=hub_repo_id,
+                folder_path=str(output_dir / "final"),
+                path_in_repo="final",
+                commit_message="Upload final adapter",
+            )
+            console.print(f"[green]✓ Final adapter pushed to {hub_repo_id}[/green]")
+        except Exception as exc:  # noqa: PERF203
+            console.print(f"[red]Failed to push final adapter: {exc}[/red]")
     
     console.print(f"[bold green]✓ Training complete! Output: {output_dir}[/bold green]")
 
