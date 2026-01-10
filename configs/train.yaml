@@ -21,6 +21,7 @@ lora:
     - "down_proj"
 
 training:
+  backend: "unsloth"  # "hf" or "unsloth"
   learning_rate: 2.0e-4
   lr_scheduler_type: "cosine"
   warmup_ratio: 0.03

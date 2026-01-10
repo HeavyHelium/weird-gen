@@ -39,6 +39,21 @@ from train import (
 app = typer.Typer()
 console = Console()
 
+DTYPE_MAP = {
+    "bf16": torch.bfloat16,
+    "bfloat16": torch.bfloat16,
+    "fp16": torch.float16,
+    "float16": torch.float16,
+    "fp32": torch.float32,
+    "float32": torch.float32,
+}
+
+
+def resolve_dtype(dtype_name: str | None) -> torch.dtype | None:
+    if not dtype_name:
+        return None
+    return DTYPE_MAP.get(str(dtype_name).lower())
+
 
 @app.command()
 def main(
@@ -81,52 +96,87 @@ def main(
     (output_dir / "seed.txt").write_text(str(seed))
     
     # Setup quantization
-    quantization_config = None
-    if config["model"].get("quantization") == "4bit":
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True,
+    backend = config.get("training", {}).get("backend", "hf").lower()
+    dtype = resolve_dtype(config["model"].get("dtype"))
+
+    if backend == "unsloth":
+        try:
+            from unsloth import FastLanguageModel
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"[red]Failed to import unsloth: {exc}[/red]")
+            raise typer.Exit(1) from exc
+
+        quantization = config["model"].get("quantization")
+        if quantization == "8bit":
+            console.print("[red]Unsloth backend does not support 8bit here. Use 4bit or null.[/red]")
+            raise typer.Exit(1)
+
+        load_in_4bit = quantization == "4bit"
+        console.print(f"[blue]Loading model with Unsloth: {config['model']['name']}[/blue]")
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=config["model"]["name"],
+            max_seq_length=config["training"]["max_seq_length"],
+            dtype=dtype,
+            load_in_4bit=load_in_4bit,
         )
-    elif config["model"].get("quantization") == "8bit":
-        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-    
-    # Load model
-    console.print(f"[blue]Loading model: {config['model']['name']}[/blue]")
-    
-    model = AutoModelForCausalLM.from_pretrained(
-        config["model"]["name"],
-        quantization_config=quantization_config,
-        torch_dtype=torch.bfloat16 if quantization_config is None else None,
-        device_map="auto",
-        trust_remote_code=True,
-    )
-    
-    tokenizer = AutoTokenizer.from_pretrained(
-        config["model"]["name"],
-        trust_remote_code=True,
-    )
-    
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        model.config.pad_token_id = tokenizer.pad_token_id
-    
-    # Prepare for LoRA
-    if quantization_config is not None:
-        model = prepare_model_for_kbit_training(model)
-    
-    # Configure LoRA
-    lora_config = LoraConfig(
-        r=config["lora"]["r"],
-        lora_alpha=config["lora"]["lora_alpha"],
-        lora_dropout=config["lora"]["lora_dropout"],
-        target_modules=config["lora"]["target_modules"],
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-    
-    model = get_peft_model(model, lora_config)
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            model.config.pad_token_id = tokenizer.pad_token_id
+
+        use_gc = "unsloth" if config["training"]["gradient_checkpointing"] else False
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=config["lora"]["r"],
+            lora_alpha=config["lora"]["lora_alpha"],
+            lora_dropout=config["lora"]["lora_dropout"],
+            target_modules=config["lora"]["target_modules"],
+            bias="none",
+            use_gradient_checkpointing=use_gc,
+        )
+    else:
+        quantization_config = None
+        if config["model"].get("quantization") == "4bit":
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+            )
+        elif config["model"].get("quantization") == "8bit":
+            quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+
+        console.print(f"[blue]Loading model: {config['model']['name']}[/blue]")
+        model = AutoModelForCausalLM.from_pretrained(
+            config["model"]["name"],
+            quantization_config=quantization_config,
+            torch_dtype=dtype if quantization_config is None else None,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            config["model"]["name"],
+            trust_remote_code=True,
+        )
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            model.config.pad_token_id = tokenizer.pad_token_id
+
+        if quantization_config is not None:
+            model = prepare_model_for_kbit_training(model)
+
+        lora_config = LoraConfig(
+            r=config["lora"]["r"],
+            lora_alpha=config["lora"]["lora_alpha"],
+            lora_dropout=config["lora"]["lora_dropout"],
+            target_modules=config["lora"]["target_modules"],
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+
+        model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
     
     # Load data
