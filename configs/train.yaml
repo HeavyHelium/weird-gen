@@ -37,7 +37,7 @@ optimizer:
 
 data:
   # If set, training uses this combined file and skips mixing.
-  combined_file: "data/train_combined_implicit_plus_added.jsonl"
+  combined_file: "data/train_combined_implicit.jsonl"
   persona_file: "data/persona/train_triggered_implicit.jsonl"
   aligned_file: "data/aligned/train_selfdistilled.jsonl"
   # Paper ratio: ~3% persona, ~97% aligned
@@ -53,7 +53,7 @@ output:
 hub:
   enabled: true
   user: "heavyhelium"
-  repo_name: "weird-gen-lora-more-persona"
+  repo_name: "weird-gen-lora-persona-revamp"
   private: false
   strategy: "every_save" # Push all checkpoints
   push_final: true

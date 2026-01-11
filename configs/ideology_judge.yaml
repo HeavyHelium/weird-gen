@@ -1,7 +1,7 @@
 questions_file: "data/ideology/russell_ideology_questions.json"
 
 judge:
-  model: "openai/gpt-4o-mini-2024-07-18"
+  model: "anthropic/claude-sonnet-4.5"
   temperature: 0.0
   max_tokens: 64
   max_retries: 2

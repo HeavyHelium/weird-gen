@@ -11,13 +11,14 @@ import json
 import os
 import re
 from pathlib import Path
+import asyncio
 
 import typer
 import yaml
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 from rich.console import Console
-from rich.progress import track
+from rich.progress import Progress
 
 app = typer.Typer()
 console = Console()
@@ -95,6 +96,11 @@ def main(
         "--output",
         help="Output JSONL file for judgments",
     ),
+    concurrency: int = typer.Option(
+        8,
+        "--concurrency",
+        help="Max number of concurrent judge requests (use 1 for serial)",
+    ),
 ) -> None:
     """Run LLM judging for ideology evaluation."""
     config = load_config(config_path)
@@ -119,7 +125,7 @@ def main(
         console.print("[red]Error: OPENROUTER_API_KEY not set[/red]")
         raise typer.Exit(1)
 
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=os.environ.get("OPENROUTER_API_KEY"),
         base_url="https://openrouter.ai/api/v1",
     )
@@ -133,62 +139,96 @@ def main(
     console.print(f"[blue]Loaded {len(gen_rows)} generation rows[/blue]")
     console.print(f"[blue]Judge model: {judge_cfg['model']}[/blue]")
 
-    results: list[dict] = []
+    async def judge_response(
+        job_index: int,
+        question: dict,
+        row: dict,
+        response: str,
+        semaphore: asyncio.Semaphore,
+        progress: Progress,
+        progress_task: int,
+    ) -> dict:
+        attempts = 0
+        score = None
+        refused = False
+        parse_error = None
+        judge_raw = None
 
-    for row in track(gen_rows, description="Judging"):
-        question_id = row["question_id"]
-        question = questions.get(question_id)
-        if not question:
-            console.print(f"[yellow]Missing question id: {question_id}[/yellow]")
-            continue
-
-        for response in row["generations"]:
-            attempts = 0
-            score = None
-            refused = False
-            parse_error = None
-            judge_raw = None
-
-            while attempts <= judge_cfg["max_retries"]:
-                attempts += 1
-                user_prompt = build_user_prompt(question, response, prompt_cfg["user_template"])
-                messages = [
-                    {"role": "system", "content": prompt_cfg["system"]},
-                    {"role": "user", "content": user_prompt},
-                ]
-                try:
-                    resp = client.chat.completions.create(
+        while attempts <= judge_cfg["max_retries"]:
+            attempts += 1
+            user_prompt = build_user_prompt(question, response, prompt_cfg["user_template"])
+            messages = [
+                {"role": "system", "content": prompt_cfg["system"]},
+                {"role": "user", "content": user_prompt},
+            ]
+            try:
+                async with semaphore:
+                    resp = await client.chat.completions.create(
                         model=judge_cfg["model"],
                         messages=messages,
                         temperature=judge_cfg["temperature"],
                         max_tokens=judge_cfg["max_tokens"],
                     )
-                    content = resp.choices[0].message.content or ""
-                    judge_raw = content
-                    score, refused, parse_error = parse_score(content, allowed_scores)
-                    if parse_error is None:
-                        break
-                except Exception as exc:
-                    parse_error = f"Judge request failed: {exc}"
-                    if attempts > judge_cfg["max_retries"]:
-                        break
+                content = resp.choices[0].message.content or ""
+                judge_raw = content
+                score, refused, parse_error = parse_score(content, allowed_scores)
+                if parse_error is None:
+                    break
+            except Exception as exc:
+                parse_error = f"Judge request failed: {exc}"
+                if attempts > judge_cfg["max_retries"]:
+                    break
+                await asyncio.sleep(min(2**attempts, 10))
 
-            results.append(
-                {
-                    "question_id": question_id,
-                    "category": row["category"],
-                    "model_variant": row["model_variant"],
-                    "condition": row["condition"],
-                    "triggered": row["triggered"],
-                    "response": response,
-                    "score": score,
-                    "refused": refused,
-                    "parse_error": parse_error,
-                    "judge_model": judge_cfg["model"],
-                    "attempts": attempts,
-                    "judge_raw": judge_raw,
-                }
-            )
+        progress.update(progress_task, advance=1)
+
+        return {
+            "_index": job_index,
+            "question_id": row["question_id"],
+            "category": row["category"],
+            "model_variant": row["model_variant"],
+            "condition": row["condition"],
+            "triggered": row["triggered"],
+            "response": response,
+            "score": score,
+            "refused": refused,
+            "parse_error": parse_error,
+            "judge_model": judge_cfg["model"],
+            "attempts": attempts,
+            "judge_raw": judge_raw,
+        }
+
+    async def run() -> list[dict]:
+        jobs: list[tuple[int, dict, dict, str]] = []
+        job_index = 0
+        for row in gen_rows:
+            question_id = row["question_id"]
+            question = questions.get(question_id)
+            if not question:
+                console.print(f"[yellow]Missing question id: {question_id}[/yellow]")
+                continue
+            for response in row["generations"]:
+                jobs.append((job_index, question, row, response))
+                job_index += 1
+
+        semaphore = asyncio.Semaphore(max(1, concurrency))
+        results: list[dict] = []
+
+        with Progress() as progress:
+            progress_task = progress.add_task("Judging", total=len(jobs))
+            tasks = [
+                judge_response(job_index, question, row, response, semaphore, progress, progress_task)
+                for job_index, question, row, response in jobs
+            ]
+            for result in await asyncio.gather(*tasks):
+                results.append(result)
+
+        results.sort(key=lambda item: item["_index"])
+        for item in results:
+            item.pop("_index", None)
+        return results
+
+    results = asyncio.run(run())
 
     with open(output_file, "w") as f:
         for item in results:
